@@ -45,6 +45,46 @@ body.light-theme {
   cursor: pointer;
 }
 
+
+.top-shortcuts {
+  position: fixed;
+  top: 22px;
+  left: 0;
+  right: 0;
+  height: 44px;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.top-shortcuts .shortcut-btn {
+  pointer-events: auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--primary);
+  color: #fff;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  position: absolute;
+}
+
+.top-shortcuts .shortcut-guide {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.top-shortcuts .shortcut-logout {
+  right: 16px;
+}
+
+body.menu-collapsed .menu-dependent {
+  display: none;
+}
+
 .side-menu {
   position: fixed;
   top: 0;
@@ -233,6 +273,7 @@ a { color: var(--link); }
   .menu-nav a { width: 46px; justify-content: center; }
   .menu-nav a small { display: none; }
   .menu-actions button { width: 46px; }
+  .top-shortcuts { top: 16px; }
 }
 
 .stock-zero td { opacity: 0.75; }

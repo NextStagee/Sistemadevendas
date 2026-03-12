@@ -10,6 +10,10 @@
 <body class="light-theme">
   {% if session.get('user_id') %}
   <button id="menu-toggle" class="menu-toggle" type="button" aria-label="Abrir ou fechar menu">☰</button>
+  <div class="top-shortcuts menu-dependent" id="top-shortcuts">
+    <a class="shortcut-btn shortcut-guide" href="{{ url_for('guide') }}" title="Guia de uso">❓</a>
+    <a class="shortcut-btn shortcut-logout" href="{{ url_for('logout') }}" title="Sair">🚪</a>
+  </div>
   <aside id="side-menu" class="side-menu">
     <div class="menu-header">
       <img src="{{ url_for('static', filename=logo_path) }}" alt="Logo da loja" class="store-logo" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
@@ -26,7 +30,6 @@
       <a href="{{ url_for('reports') }}" title="Relatórios"><span>📈</span><small>Relatórios</small></a>
       <a href="{{ url_for('monthly_management') }}" title="Gerenciar mês"><span>🗓️</span><small>Mês</small></a>
       <a href="{{ url_for('sales_history') }}" title="Histórico"><span>🧾</span><small>Histórico</small></a>
-      <a href="{{ url_for('logout') }}" title="Sair"><span>🚪</span><small>Sair</small></a>
     </nav>
 
     <div class="menu-actions">

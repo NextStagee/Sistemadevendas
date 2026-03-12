@@ -237,6 +237,12 @@ def logout():
     return redirect(url_for("login"))
 
 
+@app.route("/guide")
+def guide():
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    return render_template("guide.html")
 
 
 @app.post("/admin/reset-data")

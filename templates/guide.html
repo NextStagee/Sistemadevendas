@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>Guia rápido do sistema</h2>
+  <ol>
+    <li><strong>Produtos:</strong> cadastre nome, categoria, custo, venda e estoque inicial.</li>
+    <li><strong>Estoque:</strong> use entradas e ajustes para manter as quantidades corretas.</li>
+    <li><strong>Caixa:</strong> abra o caixa antes de vender e feche ao fim do turno.</li>
+    <li><strong>PDV:</strong> selecione os itens, informe quantidade e finalize a venda.</li>
+    <li><strong>Mesa/Fiado:</strong> registre cliente e produto; ao receber, use o botão <strong>Pago</strong>.</li>
+    <li><strong>Relatórios:</strong> acompanhe faturamento, lucro e produtos com estoque baixo.</li>
+    <li><strong>Histórico:</strong> consulte vendas e cancelamentos quando necessário.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h3>Dicas importantes</h3>
+  <ul>
+    <li>Produtos zerados não podem ser vendidos até repor estoque.</li>
+    <li>Quando um mês está fechado, alterações daquele período ficam bloqueadas.</li>
+    <li>Mantenha backup do banco <code>pdv.db</code> regularmente.</li>
+  </ul>
+</section>
+{% endblock %}
