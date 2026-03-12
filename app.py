@@ -883,6 +883,61 @@ def mesa_update_total(tab_id: int):
     return redirect(url_for("mesa"))
 
 
+@app.post("/mesa/<int:tab_id>/pay")
+def mesa_pay(tab_id: int):
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+
+    tab = db.execute("SELECT * FROM open_tabs WHERE id = ?", (tab_id,)).fetchone()
+    if not tab:
+        flash("Registro de fiado não encontrado.", "warning")
+        return redirect(url_for("mesa"))
+
+    month_key_now = datetime.now().strftime("%Y-%m")
+    if is_month_closed(db, month_key_now):
+        flash(f"O mês {month_key_now} está fechado para novos recebimentos.", "danger")
+        return redirect(url_for("monthly_management", month=month_key_now))
+
+    subtotal = tab["quantity"] * tab["unit_price"]
+    discount = tab["discount"]
+    total = max(tab["total_debt"], 0)
+
+    session_row = db.execute(
+        "SELECT * FROM cash_sessions WHERE status = 'OPEN' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    cash_session_id = session_row["id"] if session_row else None
+
+    cur = db.execute(
+        """
+        INSERT INTO sales (created_at, subtotal, discount, total, payment_method, cash_session_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (now_iso(), subtotal, discount, total, "DINHEIRO", cash_session_id),
+    )
+    sale_id = cur.lastrowid
+
+    db.execute(
+        """
+        INSERT INTO sale_items (sale_id, product_id, product_name, quantity, unit_price, total_price)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (sale_id, tab["product_id"], tab["product_name"], tab["quantity"], tab["unit_price"], subtotal),
+    )
+
+    if cash_session_id:
+        db.execute(
+            "UPDATE cash_sessions SET total_sales = total_sales + ? WHERE id = ?",
+            (total, cash_session_id),
+        )
+
+    db.execute("DELETE FROM open_tabs WHERE id = ?", (tab_id,))
+    db.commit()
+    flash(f"Fiado do cliente {tab['client_name']} baixado como pago.", "success")
+    return redirect(url_for("sale_receipt", sale_id=sale_id))
+
+
 @app.post("/monthly/sales/<int:sale_id>/delete")
 def monthly_delete_sale(sale_id: int):
     redirect_resp = require_login()

@@ -60,7 +60,10 @@
           <button type="submit">Salvar obs</button>
         </form>
       </td>
-      <td>
+      <td class="inline">
+        <form method="post" action="{{ url_for('mesa_pay', tab_id=tab['id']) }}" onsubmit="return confirm('Confirmar pagamento do fiado e gerar comprovante?');">
+          <button type="submit">Pago</button>
+        </form>
         <form method="post" action="{{ url_for('mesa_delete', tab_id=tab['id']) }}" onsubmit="return confirm('Remover cliente da lista de fiados?');">
           <button type="submit">Remover</button>
         </form>
