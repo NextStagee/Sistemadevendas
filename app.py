@@ -189,8 +189,14 @@ def is_month_closed(db: sqlite3.Connection, month_key: str) -> bool:
 
 
 def parse_money(value: str | None) -> float:
-    raw = (value or "0").strip().replace("R$", "").replace(" ", "").replace(".", "").replace(",", ".")
-    return float(raw or 0)
+    raw = (value or "0").strip().replace("R$", "").replace(" ", "")
+    if not raw:
+        return 0.0
+
+    # Se vier no padrão BR (1.234,56), remove separador de milhar e troca vírgula por ponto.
+    if "," in raw:
+        raw = raw.replace(".", "").replace(",", ".")
+    return float(raw)
 
 
 app.jinja_env.filters["fmt_dt"] = fmt_dt

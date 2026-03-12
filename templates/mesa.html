@@ -17,7 +17,7 @@
       <input type="number" name="quantity" min="1" value="1" required>
     </label>
     <label>Desconto
-      <input type="number" name="discount" step="0.01" min="0" value="0">
+      <input name="discount" value="0" placeholder="0,00" inputmode="decimal">
     </label>
     <label>Observação
       <input name="note" placeholder="Ex.: paga no fim da semana">
@@ -50,7 +50,7 @@
       <td>R$ {{ '%.2f'|format(tab['discount']) }}</td>
       <td>
         <form method="post" action="{{ url_for('mesa_update_total', tab_id=tab['id']) }}" class="inline">
-          <input type="number" name="total_debt" step="0.01" min="0" value="{{ '%.2f'|format(tab['total_debt']) }}" required>
+          <input name="total_debt" value="{{ '%.2f'|format(tab['total_debt']) }}" placeholder="0,00" inputmode="decimal" required>
           <button type="submit">Salvar valor</button>
         </form>
       </td>
