@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>Cadastro Rápido de Produtos</h2>
+  <form method="post" class="grid three">
+    <label>Nome
+      <input name="name" required autofocus placeholder="Ex: Cerveja Lata 350ml">
+    </label>
+    <label>Categoria
+      <input name="category" required placeholder="cerveja, whisky, vodka...">
+    </label>
+    <label>Estoque inicial
+      <input type="number" name="stock_qty" required value="0" min="0">
+    </label>
+    <label>Preço de custo
+      <input type="number" step="0.01" name="cost_price" required value="0.00" min="0">
+    </label>
+    <label>Preço de venda
+      <input type="number" step="0.01" name="sale_price" required value="0.00" min="0">
+    </label>
+    <div class="inline" style="align-items:end;">
+      <button type="submit">Cadastrar</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h3>Gerenciar produtos</h3>
+  <table>
+    <tr><th>Nome</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Estoque</th><th>Ações</th></tr>
+    {% for p in products %}
+      <tr>
+        <form method="post" action="{{ url_for('product_update', product_id=p['id']) }}">
+          <td><input name="name" value="{{ p['name'] }}" required></td>
+          <td><input name="category" value="{{ p['category'] }}" required></td>
+          <td><input type="number" step="0.01" name="cost_price" value="{{ '%.2f'|format(p['cost_price']) }}" required></td>
+          <td><input type="number" step="0.01" name="sale_price" value="{{ '%.2f'|format(p['sale_price']) }}" required></td>
+          <td>{{ '%.1f'|format(((p['sale_price']-p['cost_price'])/p['cost_price']*100) if p['cost_price'] else 0) }}%</td>
+          <td><input type="number" name="stock_qty" value="{{ p['stock_qty'] }}" required></td>
+          <td class="inline">
+            <button type="submit">Salvar</button>
+        </form>
+            <form method="post" action="{{ url_for('product_delete', product_id=p['id']) }}" onsubmit="return confirm('Deseja remover este produto?');">
+              <button type="submit">Remover</button>
+            </form>
+          </td>
+      </tr>
+    {% endfor %}
+  </table>
+</section>
+{% endblock %}

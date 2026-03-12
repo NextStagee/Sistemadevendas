@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="grid three">
+  <article class="card"><h3>Faturamento do dia</h3><p>R$ {{ '%.2f'|format(day_stats['faturamento']) }}</p></article>
+  <article class="card"><h3>Vendas feitas</h3><p>{{ day_stats['vendas'] }}</p></article>
+  <article class="card"><h3>Produtos acabando</h3><p>{{ low_stock|length }}</p></article>
+</section>
+<section class="card">
+  <h3>Alerta de estoque baixo</h3>
+  <ul>
+    {% for p in low_stock %}<li>{{ p['name'] }} - {{ p['stock_qty'] }} un</li>{% else %}<li>Nenhum produto com estoque baixo.</li>{% endfor %}
+  </ul>
+</section>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="grid two">
+  <article class="card">
+    <h2>Abertura de Caixa</h2>
+    <form method="post">
+      <input type="hidden" name="action" value="open">
+      <label>
+        Valor inicial
+        <input type="number" step="0.01" name="opening_amount" required>
+      </label>
+      <button type="submit">Abrir Caixa</button>
+    </form>
+    {% if open_session %}
+      <p>
+        Caixa aberto em {{ open_session['opened_at']|fmt_dt }}
+        com R$ {{ '%.2f'|format(open_session['opening_amount']) }}.
+      </p>
+    {% endif %}
+  </article>
+
+  <article class="card">
+    <h2>Fechamento Automático</h2>
+    <form method="post">
+      <input type="hidden" name="action" value="close">
+      <label>
+        Valor contado no caixa
+        <input type="number" step="0.01" name="closing_amount_reported" required>
+      </label>
+      <button type="submit">Fechar Caixa</button>
+    </form>
+  </article>
+</section>
+
+<section class="card">
+  <h3>Relatório diário</h3>
+  <p>Total vendido no dia: <b>R$ {{ '%.2f'|format(total_day) }}</b></p>
+  <ul>
+    {% for r in report %}
+      <li>{{ r['payment_method'] }}: R$ {{ '%.2f'|format(r['total']) }}</li>
+    {% else %}
+      <li>Sem vendas registradas hoje.</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="card">
+  <h3>Histórico de fechamentos</h3>
+  <table>
+    <tr>
+      <th>ID</th>
+      <th>Abertura</th>
+      <th>Fechamento</th>
+      <th>Total Vendas</th>
+      <th>Dinheiro Esperado</th>
+      <th>Valor Informado</th>
+      <th>Diferença</th>
+      <th>Status</th>
+    </tr>
+    {% for h in history %}
+      <tr>
+        <td>{{ h['id'] }}</td>
+        <td>{{ h['opened_at']|fmt_dt }}</td>
+        <td>{{ h['closed_at']|fmt_dt }}</td>
+        <td>R$ {{ '%.2f'|format(h['total_sales'] or 0) }}</td>
+        <td>R$ {{ '%.2f'|format(h['expected_cash'] or 0) }}</td>
+        <td>R$ {{ '%.2f'|format(h['closing_amount_reported'] or 0) }}</td>
+        <td>R$ {{ '%.2f'|format(h['cash_difference'] or 0) }}</td>
+        <td>{{ h['status']|label_status }}</td>
+      </tr>
+    {% else %}
+      <tr>
+        <td colspan="8">Sem histórico de caixa.</td>
+      </tr>
+    {% endfor %}
+  </table>
+</section>
+{% endblock %}

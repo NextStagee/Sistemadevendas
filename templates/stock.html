@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="grid two">
+<article class="card">
+<h2>Entrada de produtos</h2>
+<form method="post" action="{{ url_for('stock_entry') }}">
+  <label>Produto<select name="product_id">{% for p in products %}<option value="{{ p['id'] }}">{{ p['name'] }}</option>{% endfor %}</select></label>
+  <label>Quantidade<input type="number" name="quantity" required></label>
+  <label>Obs<input name="note"></label>
+  <button>Registrar entrada</button>
+</form>
+</article>
+<article class="card">
+<h2>Ajuste manual</h2>
+<form method="post" action="{{ url_for('stock_adjust') }}">
+  <label>Produto<select name="product_id">{% for p in products %}<option value="{{ p['id'] }}">{{ p['name'] }}</option>{% endfor %}</select></label>
+  <label>Quantidade (+/-)<input type="number" name="quantity" required></label>
+  <label>Obs<input name="note" placeholder="quebra, perda, erro"></label>
+  <button>Registrar ajuste</button>
+</form>
+</article>
+</section>
+<section class="card">
+<h3>Estoque atual</h3>
+<ul>{% for p in products %}<li class="{{ 'low' if p['stock_qty'] <= low_threshold else '' }}">{{ p['name'] }}: {{ p['stock_qty'] }}</li>{% endfor %}</ul>
+</section>
+<section class="card"><h3>Histórico de movimentações</h3>
+<table><tr><th>Data</th><th>Produto</th><th>Tipo</th><th>Qtd</th><th>Obs</th></tr>
+{% for m in movements %}<tr><td>{{ m['created_at']|fmt_dt }}</td><td>{{ m['product_name'] }}</td><td>{{ m['movement_type']|label_movement }}</td><td>{{ m['quantity'] }}</td><td>{{ m['note'] }}</td></tr>{% endfor %}
+</table>
+</section>
+{% endblock %}

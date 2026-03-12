@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quadrinhas Drinks Vendas</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename=favicon_path) }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=asset_version) }}">
+</head>
+<body>
+  {% if session.get('user_id') %}
+  <button id="menu-toggle" class="menu-toggle" type="button" aria-label="Abrir ou fechar menu">☰</button>
+  <aside id="side-menu" class="side-menu">
+    <div class="menu-header">
+      <img src="{{ url_for('static', filename=logo_path) }}" alt="Logo da loja" class="store-logo" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+      <h1 style="display:none;">Quadrinhas Drinks Vendas</h1>
+    </div>
+
+    <nav class="menu-nav">
+      <a href="{{ url_for('dashboard') }}" title="Início"><span>📊</span><small>Início</small></a>
+      <a href="{{ url_for('pdv') }}" title="PDV"><span>🛒</span><small>PDV</small></a>
+      <a href="{{ url_for('cash') }}" title="Caixa"><span>💰</span><small>Caixa</small></a>
+      <a href="{{ url_for('products') }}" title="Produtos"><span>📦</span><small>Produtos</small></a>
+      <a href="{{ url_for('stock') }}" title="Estoque"><span>🏷️</span><small>Estoque</small></a>
+      <a href="{{ url_for('reports') }}" title="Relatórios"><span>📈</span><small>Relatórios</small></a>
+      <a href="{{ url_for('monthly_management') }}" title="Gerenciar mês"><span>🗓️</span><small>Mês</small></a>
+      <a href="{{ url_for('sales_history') }}" title="Histórico"><span>🧾</span><small>Histórico</small></a>
+      <a href="{{ url_for('logout') }}" title="Sair"><span>🚪</span><small>Sair</small></a>
+    </nav>
+
+    <div class="menu-actions">
+      <button id="theme-toggle" type="button" title="Alternar tema">☀️</button>
+      <form method="post" action="{{ url_for('reset_data') }}" onsubmit="return confirm('Atenção: dados de caixa e vendas serão apagados. Deseja continuar?');">
+        <button class="danger-btn" type="submit" title="Apagar dados de caixa e vendas">🗑️</button>
+      </form>
+    </div>
+  </aside>
+  {% endif %}
+
+  <main class="app-main {% if session.get('user_id') %}with-sidebar{% endif %}">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    const body = document.body;
+    const menu = document.getElementById('side-menu');
+    const menuToggle = document.getElementById('menu-toggle');
+    const themeToggle = document.getElementById('theme-toggle');
+
+    if (menuToggle && menu) {
+      menuToggle.addEventListener('click', () => {
+        menu.classList.toggle('closed');
+        body.classList.toggle('menu-collapsed');
+      });
+    }
+
+    const updateThemeIcon = () => {
+      if (!themeToggle) return;
+      themeToggle.textContent = body.classList.contains('light-theme') ? '🌙' : '☀️';
+    };
+
+    const savedTheme = localStorage.getItem('qdrinks-theme');
+    if (savedTheme === 'light') body.classList.add('light-theme');
+    updateThemeIcon();
+
+    if (themeToggle) {
+      themeToggle.addEventListener('click', () => {
+        body.classList.toggle('light-theme');
+        localStorage.setItem('qdrinks-theme', body.classList.contains('light-theme') ? 'light' : 'dark');
+        updateThemeIcon();
+      });
+    }
+  </script>
+</body>
+</html>

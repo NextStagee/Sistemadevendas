@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="receipt-wrap">
+  <article class="receipt-card">
+    <header class="receipt-header">
+      <img src="{{ url_for('static', filename=logo_path) }}" alt="Logo da loja" class="receipt-logo" onerror="this.style.display='none';">
+      <h2>Comprovante de Venda</h2>
+      <p>Nº {{ sale['id'] }}</p>
+    </header>
+
+    <div class="receipt-meta">
+      <p><strong>Data:</strong> {{ sale['created_at']|fmt_dt }}</p>
+      <p><strong>Pagamento:</strong> {{ sale['payment_method'] }}</p>
+    </div>
+
+    <table class="receipt-table">
+      <tr><th>Item</th><th>Qtd</th><th>Total</th></tr>
+      {% for i in items %}
+      <tr>
+        <td>{{ i['product_name'] }}</td>
+        <td>{{ i['quantity'] }}</td>
+        <td>R$ {{ '%.2f'|format(i['total_price']) }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+
+    <footer class="receipt-total">
+      <p>Subtotal: <span>R$ {{ '%.2f'|format(sale['subtotal']) }}</span></p>
+      <p>Desconto: <span>R$ {{ '%.2f'|format(sale['discount']) }}</span></p>
+      <p class="grand-total">Total: <span>R$ {{ '%.2f'|format(sale['total']) }}</span></p>
+    </footer>
+  </article>
+</section>
+{% endblock %}

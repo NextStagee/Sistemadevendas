@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>Gerenciamento de Mês</h2>
+  <table>
+    <tr><th>Mês</th><th>Vendas</th><th>Faturamento</th><th>Status</th><th>Ações</th></tr>
+    {% for m in months %}
+    {% set status = month_status.get(m['month_key'])['status'] if month_status.get(m['month_key']) else 'ATIVO' %}
+    <tr>
+      <td>{{ m['month_key'] }}</td>
+      <td>{{ m['total_vendas'] }}</td>
+      <td>R$ {{ '%.2f'|format(m['faturamento']) }}</td>
+      <td>{{ status }}</td>
+      <td class="inline">
+        <a class="action-link action-open" href="{{ url_for('monthly_management', month=m['month_key'], show=1) }}">Abrir</a>
+        <a class="action-link action-export" href="{{ url_for('monthly_export', month_key=m['month_key']) }}">Baixar CSV</a>
+        <form method="post" action="{{ url_for('monthly_change_status', month_key=m['month_key']) }}" class="inline">
+          <input type="hidden" name="action" value="{{ 'open' if status == 'FECHADO' else 'close' }}">
+          <button type="submit">{{ 'Reabrir' if status == 'FECHADO' else 'Fechar mês' }}</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">Sem vendas registradas ainda.</td></tr>
+    {% endfor %}
+  </table>
+</section>
+
+{% if selected_month and show_month_details %}
+<section class="grid two" id="month-detail-area">
+  <article class="card" id="month-add-card">
+    <div class="card-head-inline">
+      <h3>Adicionar venda no mês {{ selected_month }}</h3>
+      <button class="close-card-btn" type="button" onclick="document.getElementById('month-detail-area').style.display='none';window.history.replaceState({},'', '{{ url_for('monthly_management') }}');">✕</button>
+    </div>
+    <form method="post" action="{{ url_for('monthly_add_sale') }}">
+      <input type="hidden" name="month_key" value="{{ selected_month }}">
+      <label>Total<input type="number" step="0.01" name="total" required></label>
+      <label>Pagamento
+        <select name="payment_method">{% for pm in payment_methods %}<option value="{{ pm }}">{{ pm }}</option>{% endfor %}</select>
+      </label>
+      <label>Descrição<input name="note" placeholder="Venda manual do mês"></label>
+      <button type="submit">Adicionar venda</button>
+    </form>
+  </article>
+
+  <article class="card">
+    <h3>Vendas do mês {{ selected_month }}</h3>
+    <table>
+      <tr><th>ID</th><th>Data</th><th>Total</th><th>Status</th><th>Remover</th></tr>
+      {% for s in month_sales %}
+      <tr>
+        <td>#{{ s['id'] }}</td>
+        <td>{{ s['created_at']|fmt_dt }}</td>
+        <td>R$ {{ '%.2f'|format(s['total']) }}</td>
+        <td>{{ s['status']|label_status }}</td>
+        <td>
+          <form method="post" action="{{ url_for('monthly_delete_sale', sale_id=s['id']) }}" onsubmit="return confirm('Remover esta venda do mês?');">
+            <button type="submit">Remover</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">Sem vendas no mês selecionado.</td></tr>
+      {% endfor %}
+    </table>
+  </article>
+</section>
+{% endif %}
+{% endblock %}

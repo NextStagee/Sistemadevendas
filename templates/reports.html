@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="grid three">
+<article class="card"><h3>Faturamento dia</h3><p>R$ {{ '%.2f'|format(faturamento['dia']) }}</p></article>
+<article class="card"><h3>Faturamento semana</h3><p>R$ {{ '%.2f'|format(faturamento['semana']) }}</p></article>
+<article class="card"><h3>Faturamento mês</h3><p>R$ {{ '%.2f'|format(faturamento['mes']) }}</p></article>
+</section>
+<section class="card"><h3>Lucro aproximado</h3><p>R$ {{ '%.2f'|format(lucro) }}</p></section>
+<section class="card"><h3>Produtos mais vendidos</h3>
+<table><tr><th>Produto</th><th>Qtd</th><th>Faturamento</th></tr>{% for t in top_products %}<tr><td>{{ t['product_name'] }}</td><td>{{ t['qty'] }}</td><td>R$ {{ '%.2f'|format(t['faturamento']) }}</td></tr>{% endfor %}</table>
+</section>
+<section class="card"><h3>Relatório de estoque</h3>
+<table><tr><th>Produto</th><th>Estoque</th><th>Categoria</th></tr>{% for p in stock_report %}<tr><td>{{ p['name'] }}</td><td>{{ p['stock_qty'] }}</td><td>{{ p['category'] }}</td></tr>{% endfor %}</table>
+</section>
+{% endblock %}
