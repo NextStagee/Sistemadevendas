@@ -164,7 +164,7 @@ body.menu-collapsed .app-main.with-sidebar {
 }
 
 .card {
-  background: linear-gradient(180deg, rgba(27, 40, 67, 0.62), rgba(16, 24, 40, 0.96));
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
@@ -173,7 +173,7 @@ body.menu-collapsed .app-main.with-sidebar {
 }
 
 body.light-theme .card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 249, 255, 0.94));
+  background: linear-gradient(180deg, #ffffff, #f7f9fd);
 }
 
 .small { max-width: 460px; margin-inline: auto; }
