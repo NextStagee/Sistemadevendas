@@ -416,7 +416,7 @@ def pdv():
             product = db.execute("SELECT * FROM products WHERE id = ?", (pid,)).fetchone()
             if not product or qty <= 0:
                 continue
-            if product["stock_qty"] <= 0:
+            if product["stock_qty"] == 0:
                 flash(f"Produto {product['name']} está zerado no estoque e foi ignorado.", "warning")
                 continue
             if product["stock_qty"] < qty:
