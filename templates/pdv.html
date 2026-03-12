@@ -14,14 +14,14 @@
         {% for p in products %}
         <tr data-product-row data-name="{{ p['name']|lower }}" data-price="{{ '%.2f'|format(p['sale_price']) }}" class="{{ 'stock-zero' if p['stock_qty'] == 0 else '' }}">
           <td>
-            <input type="checkbox" {% if p['stock_qty'] == 0 %}disabled{% endif %} onclick="this.closest('tr').querySelector('.qty').disabled=!this.checked">
+            <input type="checkbox" {% if p['stock_qty'] == 0 %}disabled{% endif %} onchange="toggleQty(this)">
           </td>
           <td>{{ p['name'] }} {% if p['stock_qty'] == 0 %}<b>(ZERADO)</b>{% endif %}</td>
           <td>R$ {{ '%.2f'|format(p['sale_price']) }}</td>
           <td>{{ p['stock_qty'] }}</td>
           <td>
             <input type="hidden" name="product_id" value="{{ p['id'] }}">
-            <input class="qty" type="number" name="quantity" min="0" max="{{ p['stock_qty'] }}" value="0" disabled>
+            <input class="qty" type="number" name="quantity" min="0" max="{{ p['stock_qty'] }}" value="0" readonly>
           </td>
         </tr>
         {% endfor %}
@@ -49,6 +49,13 @@
   });
 
   const totalEl = document.getElementById('pdv-selected-total');
+
+  const toggleQty = (checkbox) => {
+    const qtyInput = checkbox.closest('tr').querySelector('.qty');
+    qtyInput.readOnly = !checkbox.checked;
+    if (!checkbox.checked) qtyInput.value = 0;
+    updateSelectedTotal();
+  };
   const qtyInputs = Array.from(document.querySelectorAll('.qty'));
   const checkboxes = Array.from(document.querySelectorAll('[data-product-row] input[type="checkbox"]'));
 
