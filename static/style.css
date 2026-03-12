@@ -203,11 +203,12 @@ body.light-theme button {
 
 input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(230, 120, 23, 0.24); }
 
-button { cursor: pointer; background: var(--primary); border: none; font-weight: 600; }
+button { cursor: pointer; background: var(--primary); border: none; font-weight: 600; color: #fff; }
 button:hover { background: var(--primary-hover); }
 
 body.light-theme button {
   background: var(--primary);
+  color: #fff;
 }
 
 body.light-theme button:hover {
