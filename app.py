@@ -112,6 +112,20 @@ def init_db() -> None:
             closed_at TEXT,
             created_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS open_tabs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            client_name TEXT NOT NULL,
+            product_id INTEGER NOT NULL,
+            product_name TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            unit_price REAL NOT NULL,
+            discount REAL NOT NULL DEFAULT 0,
+            total_debt REAL NOT NULL,
+            note TEXT,
+            FOREIGN KEY(product_id) REFERENCES products(id)
+        );
         """
     )
     db.execute(
@@ -172,6 +186,11 @@ def label_movement(value: str | None) -> str:
 def is_month_closed(db: sqlite3.Connection, month_key: str) -> bool:
     row = db.execute("SELECT status FROM monthly_closures WHERE month_key = ?", (month_key,)).fetchone()
     return bool(row and row["status"] == "FECHADO")
+
+
+def parse_money(value: str | None) -> float:
+    raw = (value or "0").strip().replace("R$", "").replace(" ", "").replace(".", "").replace(",", ".")
+    return float(raw or 0)
 
 
 app.jinja_env.filters["fmt_dt"] = fmt_dt
@@ -744,6 +763,100 @@ def monthly_change_status(month_key: str):
     db.commit()
     flash(f"Mês {month_key} atualizado para {new_status}.", "success")
     return redirect(url_for("monthly_management", month=month_key))
+
+
+@app.route("/mesa", methods=["GET", "POST"])
+def mesa():
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+
+    if request.method == "POST":
+        client_name = request.form["client_name"].strip()
+        product_id = int(request.form["product_id"])
+        quantity = int(request.form["quantity"])
+        discount = parse_money(request.form.get("discount", "0"))
+        note = request.form.get("note", "").strip()
+
+        if not client_name:
+            flash("Informe o nome do cliente.", "warning")
+            return redirect(url_for("mesa"))
+        if quantity <= 0:
+            flash("Quantidade deve ser maior que zero.", "warning")
+            return redirect(url_for("mesa"))
+
+        product = db.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
+        if not product:
+            flash("Produto não encontrado.", "danger")
+            return redirect(url_for("mesa"))
+        if product["stock_qty"] <= 0:
+            flash(f"Produto {product['name']} está zerado no estoque.", "danger")
+            return redirect(url_for("mesa"))
+        if product["stock_qty"] < quantity:
+            flash(f"Estoque insuficiente para {product['name']}.", "danger")
+            return redirect(url_for("mesa"))
+
+        gross_total = quantity * product["sale_price"]
+        total_debt = max(gross_total - discount, 0)
+
+        db.execute(
+            """
+            INSERT INTO open_tabs (created_at, client_name, product_id, product_name, quantity, unit_price, discount, total_debt, note)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (now_iso(), client_name, product_id, product["name"], quantity, product["sale_price"], discount, total_debt, note),
+        )
+        db.execute("UPDATE products SET stock_qty = stock_qty - ? WHERE id = ?", (quantity, product_id))
+        db.execute(
+            "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at) VALUES (?, 'SALE', ?, ?, ?)",
+            (product_id, -quantity, f"Fiado - {client_name}", now_iso()),
+        )
+        db.commit()
+        flash("Cliente adicionado na lista de fiados e estoque atualizado.", "success")
+        return redirect(url_for("mesa"))
+
+    products = db.execute("SELECT * FROM products ORDER BY name").fetchall()
+    open_tabs = db.execute("SELECT * FROM open_tabs ORDER BY id DESC LIMIT 200").fetchall()
+    return render_template("mesa.html", products=products, open_tabs=open_tabs)
+
+
+@app.post("/mesa/<int:tab_id>/delete")
+def mesa_delete(tab_id: int):
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    row = db.execute("SELECT id FROM open_tabs WHERE id = ?", (tab_id,)).fetchone()
+    if not row:
+        flash("Registro de fiado não encontrado.", "warning")
+        return redirect(url_for("mesa"))
+    db.execute("DELETE FROM open_tabs WHERE id = ?", (tab_id,))
+    db.commit()
+    flash("Cliente removido da lista de fiados.", "warning")
+    return redirect(url_for("mesa"))
+
+
+@app.post("/mesa/<int:tab_id>/update-total")
+def mesa_update_total(tab_id: int):
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    row = db.execute("SELECT * FROM open_tabs WHERE id = ?", (tab_id,)).fetchone()
+    if not row:
+        flash("Registro de fiado não encontrado.", "warning")
+        return redirect(url_for("mesa"))
+
+    new_total = parse_money(request.form.get("total_debt", "0"))
+    if new_total < 0:
+        flash("Valor devido não pode ser negativo.", "danger")
+        return redirect(url_for("mesa"))
+
+    db.execute("UPDATE open_tabs SET total_debt = ? WHERE id = ?", (new_total, tab_id))
+    db.commit()
+    flash("Valor total devido atualizado.", "success")
+    return redirect(url_for("mesa"))
 
 
 @app.post("/monthly/sales/<int:sale_id>/delete")
