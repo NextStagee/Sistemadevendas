@@ -7,13 +7,13 @@ body{
   --sidebar: #F1F5F9;
   --text: #0F172A;
   --muted: #64748B;
-  --primary: #eb5d25;
-  --primary-hover: #e97142;
+  --primary: #e67817;
+  --primary-hover: #cf6510;
   --success: #d8f5e1;
   --danger: #ffdfe5;
   --warning: #fff1cb;
   --border: #E2E8F0;
-  --link: #2563EB;
+  --link: #e67817;
   --shadow: 0 8px 22px rgba(15, 23, 42, 0.10);
 }
 
@@ -40,7 +40,7 @@ body.light-theme {
   height: 44px;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: eb5d25;
+  background: var(--primary);
   color: #fff;
   cursor: pointer;
 }
@@ -201,7 +201,7 @@ body.light-theme button {
   background: var(--surface);
 }
 
-input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.24); }
+input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(230, 120, 23, 0.24); }
 
 button { cursor: pointer; background: var(--primary); border: none; font-weight: 600; }
 button:hover { background: var(--primary-hover); }
@@ -359,5 +359,5 @@ a { color: var(--link); }
 }
 
 .menu-nav a { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02); }
-.menu-nav a:hover { box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.34), 0 8px 20px rgba(59, 130, 246, 0.22); }
+.menu-nav a:hover { box-shadow: 0 0 0 1px rgba(230, 120, 23, 0.34), 0 8px 20px rgba(230, 120, 23, 0.22); }
 .card { backdrop-filter: blur(4px); }
