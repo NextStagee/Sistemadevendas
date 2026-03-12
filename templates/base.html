@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="{{ url_for('static', filename=favicon_path) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=asset_version) }}">
 </head>
-<body>
+<body class="light-theme">
   {% if session.get('user_id') %}
   <button id="menu-toggle" class="menu-toggle" type="button" aria-label="Abrir ou fechar menu">☰</button>
   <aside id="side-menu" class="side-menu">
@@ -19,6 +19,7 @@
     <nav class="menu-nav">
       <a href="{{ url_for('dashboard') }}" title="Início"><span>📊</span><small>Início</small></a>
       <a href="{{ url_for('pdv') }}" title="PDV"><span>🛒</span><small>PDV</small></a>
+      <a href="{{ url_for('mesa') }}" title="Mesa"><span>🪑</span><small>Mesa</small></a>
       <a href="{{ url_for('cash') }}" title="Caixa"><span>💰</span><small>Caixa</small></a>
       <a href="{{ url_for('products') }}" title="Produtos"><span>📦</span><small>Produtos</small></a>
       <a href="{{ url_for('stock') }}" title="Estoque"><span>🏷️</span><small>Estoque</small></a>
@@ -29,7 +30,6 @@
     </nav>
 
     <div class="menu-actions">
-      <button id="theme-toggle" type="button" title="Alternar tema">☀️</button>
       <form method="post" action="{{ url_for('reset_data') }}" onsubmit="return confirm('Atenção: dados de caixa e vendas serão apagados. Deseja continuar?');">
         <button class="danger-btn" type="submit" title="Apagar dados de caixa e vendas">🗑️</button>
       </form>
@@ -50,7 +50,6 @@
     const body = document.body;
     const menu = document.getElementById('side-menu');
     const menuToggle = document.getElementById('menu-toggle');
-    const themeToggle = document.getElementById('theme-toggle');
 
     if (menuToggle && menu) {
       menuToggle.addEventListener('click', () => {
@@ -59,22 +58,6 @@
       });
     }
 
-    const updateThemeIcon = () => {
-      if (!themeToggle) return;
-      themeToggle.textContent = body.classList.contains('light-theme') ? '🌙' : '☀️';
-    };
-
-    const savedTheme = localStorage.getItem('qdrinks-theme');
-    if (savedTheme === 'light') body.classList.add('light-theme');
-    updateThemeIcon();
-
-    if (themeToggle) {
-      themeToggle.addEventListener('click', () => {
-        body.classList.toggle('light-theme');
-        localStorage.setItem('qdrinks-theme', body.classList.contains('light-theme') ? 'light' : 'dark');
-        updateThemeIcon();
-      });
-    }
   </script>
 </body>
 </html>

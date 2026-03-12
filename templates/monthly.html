@@ -27,12 +27,16 @@
 </section>
 
 {% if selected_month and show_month_details %}
+{% set selected_month_status = month_status.get(selected_month)['status'] if month_status.get(selected_month) else 'ATIVO' %}
 <section class="grid two" id="month-detail-area">
   <article class="card" id="month-add-card">
     <div class="card-head-inline">
       <h3>Adicionar venda no mês {{ selected_month }}</h3>
-      <button class="close-card-btn" type="button" onclick="document.getElementById('month-detail-area').style.display='none';window.history.replaceState({},'', '{{ url_for('monthly_management') }}');">✕</button>
+      <button class="close-card-btn" id="close-month-detail" type="button">✕</button>
     </div>
+    {% if selected_month_status == 'FECHADO' %}
+    <div class="flash warning">Este mês está fechado e não aceita novas vendas.</div>
+    {% endif %}
     <form method="post" action="{{ url_for('monthly_add_sale') }}">
       <input type="hidden" name="month_key" value="{{ selected_month }}">
       <label>Total<input type="number" step="0.01" name="total" required></label>
@@ -40,7 +44,7 @@
         <select name="payment_method">{% for pm in payment_methods %}<option value="{{ pm }}">{{ pm }}</option>{% endfor %}</select>
       </label>
       <label>Descrição<input name="note" placeholder="Venda manual do mês"></label>
-      <button type="submit">Adicionar venda</button>
+      <button type="submit" {% if selected_month_status == 'FECHADO' %}disabled{% endif %}>Adicionar venda</button>
     </form>
   </article>
 
@@ -56,7 +60,7 @@
         <td>{{ s['status']|label_status }}</td>
         <td>
           <form method="post" action="{{ url_for('monthly_delete_sale', sale_id=s['id']) }}" onsubmit="return confirm('Remover esta venda do mês?');">
-            <button type="submit">Remover</button>
+            <button type="submit" {% if selected_month_status == 'FECHADO' %}disabled{% endif %}>Remover</button>
           </form>
         </td>
       </tr>
@@ -66,5 +70,15 @@
     </table>
   </article>
 </section>
+<script>
+  const closeMonthDetailButton = document.getElementById('close-month-detail');
+  if (closeMonthDetailButton) {
+    closeMonthDetailButton.addEventListener('click', () => {
+      const detailArea = document.getElementById('month-detail-area');
+      if (detailArea) detailArea.style.display = 'none';
+      window.history.replaceState({}, '', "{{ url_for('monthly_management') }}");
+    });
+  }
+</script>
 {% endif %}
 {% endblock %}
