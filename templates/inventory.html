@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>Inventário • Batida de Estoque</h2>
+  <p>Informe a contagem física para cada produto e clique em aplicar. O sistema ajustará o estoque automaticamente.</p>
+  <form method="post" action="{{ url_for('inventory_apply') }}">
+    <table>
+      <tr><th>Produto</th><th>Estoque atual</th><th>Contagem física</th></tr>
+      {% for p in products %}
+      <tr>
+        <td>{{ p['name'] }}</td>
+        <td>{{ p['stock_qty'] }}</td>
+        <td>
+          <input type="hidden" name="product_id" value="{{ p['id'] }}">
+          <input type="number" name="counted_qty" value="{{ p['stock_qty'] }}" min="0" required>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    <button type="submit" onclick="return confirm('Aplicar contagem do inventário?');">Aplicar inventário</button>
+  </form>
+</section>
+{% endblock %}

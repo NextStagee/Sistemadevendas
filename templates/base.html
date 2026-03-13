@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quadrinhas Drinks Vendas</title>
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename=favicon_path) }}">
+  <title>Sistema de Vendas</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename=favicon_path) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=asset_version) }}">
 </head>
 <body class="light-theme">
@@ -13,19 +13,40 @@
   <aside id="side-menu" class="side-menu">
     <div class="menu-header">
       <img src="{{ url_for('static', filename=logo_path) }}" alt="Logo da loja" class="store-logo" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
-      <h1 style="display:none;">Quadrinhas Drinks Vendas</h1>
+      <h1 style="display:none;">{{ system_name }}</h1>
     </div>
 
     <nav class="menu-nav">
+      {% if is_admin or 'dashboard' in allowed_tabs %}
       <a href="{{ url_for('dashboard') }}" title="Início"><span>📊</span><small>Início</small></a>
+      {% endif %}
+      {% if is_admin or 'pdv' in allowed_tabs %}
       <a href="{{ url_for('pdv') }}" title="PDV"><span>🛒</span><small>PDV</small></a>
+      {% endif %}
+      {% if is_admin or 'mesa' in allowed_tabs %}
       <a href="{{ url_for('mesa') }}" title="Mesa"><span>🪑</span><small>Mesa</small></a>
+      {% endif %}
+      {% if is_admin or 'cash' in allowed_tabs %}
       <a href="{{ url_for('cash') }}" title="Caixa"><span>💰</span><small>Caixa</small></a>
+      {% endif %}
+      {% if is_admin or 'products' in allowed_tabs %}
       <a href="{{ url_for('products') }}" title="Produtos"><span>📦</span><small>Produtos</small></a>
+      {% endif %}
+      {% if is_admin or 'stock' in allowed_tabs %}
       <a href="{{ url_for('stock') }}" title="Estoque"><span>🏷️</span><small>Estoque</small></a>
+      {% endif %}
+      {% if is_admin or 'inventory' in allowed_tabs %}
+      <a href="{{ url_for('inventory') }}" title="Inventário"><span>📋</span><small>Inventário</small></a>
+      {% endif %}
+      {% if is_admin or 'reports' in allowed_tabs %}
       <a href="{{ url_for('reports') }}" title="Relatórios"><span>📈</span><small>Relatórios</small></a>
+      {% endif %}
+      {% if is_admin or 'monthly' in allowed_tabs %}
       <a href="{{ url_for('monthly_management') }}" title="Gerenciar mês"><span>🗓️</span><small>Mês</small></a>
+      {% endif %}
+      {% if is_admin or 'sales' in allowed_tabs %}
       <a href="{{ url_for('sales_history') }}" title="Histórico"><span>🧾</span><small>Histórico</small></a>
+      {% endif %}
       {% if is_admin %}
       <a href="{{ url_for('admin_users') }}" title="Admin"><span>🔐</span><small>Admin</small></a>
       {% endif %}

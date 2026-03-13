@@ -1,6 +1,48 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="card">
+  <h2>Admin • Configurações do Sistema</h2>
+  <form method="post" action="{{ url_for('admin_settings') }}" enctype="multipart/form-data" class="grid-form">
+    <label>Nome do sistema (menu)
+      <input name="system_name" value="{{ system_name }}" required>
+    </label>
+    <label>Logo do sistema
+      <input type="file" name="logo_file" accept=".png,.jpg,.jpeg,.webp,.svg">
+    </label>
+    <button type="submit">Alterar</button>
+  </form>
+  <small>O título da página permanece fixo como "Sistema de Vendas".</small>
+</section>
+
+<section class="card">
+  <h2>Admin • Backup Diário</h2>
+  <p>Backup automático ativo: <strong>1 vez por dia</strong>. Retenção atual: {{ backup_keep_days }} dias.</p>
+  <p>Último backup automático: <strong>{{ backup_last_run }}</strong></p>
+  <form method="post" action="{{ url_for('admin_run_backup') }}">
+    <button type="submit">Gerar backup agora</button>
+  </form>
+
+  <h3>Arquivos de backup</h3>
+  <table>
+    <thead>
+      <tr><th>Arquivo</th><th>Data</th><th>Tamanho</th><th>Ação</th></tr>
+    </thead>
+    <tbody>
+      {% for b in backups %}
+      <tr>
+        <td>{{ b['name'] }}</td>
+        <td>{{ b['created_at'] }}</td>
+        <td>{{ b['size_kb'] }} KB</td>
+        <td><a href="{{ url_for('admin_download_backup', backup_name=b['name']) }}">Baixar</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">Nenhum backup gerado ainda.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
   <h2>Admin • Usuários</h2>
   <p>Cadastre clientes com validade de acesso de 30, 60 ou 90 dias.</p>
 
@@ -31,7 +73,8 @@
         <th>Perfil</th>
         <th>Status</th>
         <th>Validade</th>
-        <th>Ação</th>
+        <th>Abas permitidas</th>
+        <th>Ações</th>
       </tr>
     </thead>
     <tbody>
@@ -51,6 +94,24 @@
         <td>{{ user['expires_at']|fmt_dt if user['expires_at'] else '-' }}</td>
         <td>
           {% if user['role'] != 'ADMIN' %}
+          {% set user_tabs = user['allowed_tabs'].split(',') if user['allowed_tabs'] else [] %}
+          <form method="post" action="{{ url_for('admin_update_user_tabs', user_id=user['id']) }}">
+            <div class="inline" style="gap:8px;flex-wrap:wrap;">
+              {% for tab_key, tab_label in available_tabs.items() %}
+              <label style="font-size:.8rem;">
+                <input type="checkbox" name="allowed_tabs" value="{{ tab_key }}" {% if tab_key in user_tabs %}checked{% endif %}>
+                {{ tab_label }}
+              </label>
+              {% endfor %}
+            </div>
+            <button type="submit">Salvar abas</button>
+          </form>
+          {% else %}
+          Todas
+          {% endif %}
+        </td>
+        <td>
+          {% if user['role'] != 'ADMIN' %}
           <form method="post" action="{{ url_for('admin_update_user', user_id=user['id']) }}" class="inline">
             <select name="duration_days" required>
               <option value="30">30 dias</option>
@@ -59,6 +120,9 @@
             </select>
             <button name="action" value="renew" type="submit">Reativar/renovar</button>
             <button name="action" value="block" type="submit" class="danger-btn" onclick="return confirm('Bloquear usuário?');">Bloquear</button>
+          </form>
+          <form method="post" action="{{ url_for('admin_delete_user', user_id=user['id']) }}" class="inline" onsubmit="return confirm('Remover usuário? Esta ação não pode ser desfeita.');">
+            <button type="submit" class="danger-btn">Remover usuário</button>
           </form>
           {% else %}
           -
