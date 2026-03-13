@@ -63,6 +63,7 @@
         <td>
           {% if is_admin %}
           <form method="post" action="{{ url_for('monthly_delete_sale', sale_id=s['id']) }}" onsubmit="return confirm('Remover esta venda do mês?');">
+            <input type="hidden" name="month_key" value="{{ selected_month }}">
             <button type="submit" {% if selected_month_status == 'FECHADO' %}disabled{% endif %}>Remover</button>
           </form>
           {% else %}
