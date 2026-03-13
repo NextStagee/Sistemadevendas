@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Admin • Usuários</h2>
+  <p>Cadastre clientes com validade de acesso de 30, 60 ou 90 dias.</p>
+
+  <form method="post" class="grid-form">
+    <label>Usuário
+      <input name="username" required>
+    </label>
+    <label>Senha
+      <input name="password" required>
+    </label>
+    <label>Validade
+      <select name="duration_days" required>
+        <option value="30">30 dias</option>
+        <option value="60">60 dias</option>
+        <option value="90">90 dias</option>
+      </select>
+    </label>
+    <button type="submit">Criar usuário cliente</button>
+  </form>
+</section>
+
+<section class="card">
+  <h3>Usuários cadastrados</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Usuário</th>
+        <th>Perfil</th>
+        <th>Status</th>
+        <th>Validade</th>
+        <th>Ação</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+        <td>{{ user['username'] }}</td>
+        <td>{{ user['role'] }}</td>
+        <td>
+          {% if user['role'] == 'ADMIN' %}
+            Ativo
+          {% elif user['is_active'] and (not user['expires_at'] or user['expires_at'] > now) %}
+            Ativo
+          {% else %}
+            Bloqueado
+          {% endif %}
+        </td>
+        <td>{{ user['expires_at']|fmt_dt if user['expires_at'] else '-' }}</td>
+        <td>
+          {% if user['role'] != 'ADMIN' %}
+          <form method="post" action="{{ url_for('admin_update_user', user_id=user['id']) }}" class="inline">
+            <select name="duration_days" required>
+              <option value="30">30 dias</option>
+              <option value="60">60 dias</option>
+              <option value="90">90 dias</option>
+            </select>
+            <button name="action" value="renew" type="submit">Reativar/renovar</button>
+            <button name="action" value="block" type="submit" class="danger-btn" onclick="return confirm('Bloquear usuário?');">Bloquear</button>
+          </form>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

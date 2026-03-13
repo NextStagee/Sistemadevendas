@@ -54,9 +54,13 @@
         </form>
       </td>
       <td>
+        {% if is_admin %}
         <form method="post" action="{{ url_for('mesa_delete', tab_id=tab['id']) }}" onsubmit="return confirm('Remover cliente da lista de fiados?');">
           <button type="submit">Remover</button>
         </form>
+        {% else %}
+        -
+        {% endif %}
       </td>
     </tr>
     {% else %}
