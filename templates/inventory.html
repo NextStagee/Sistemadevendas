@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>Inventário • Batida de Estoque</h2>
+  <p>Informe a contagem física para cada produto. A coluna diferença mostra se o item está a mais ou a menos.</p>
+  <form method="post" action="{{ url_for('inventory_apply') }}">
+    <table>
+      <tr><th>Produto</th><th>Estoque atual</th><th>Contagem física</th><th>Diferença</th></tr>
+      {% for p in products %}
+      <tr>
+        <td>{{ p['name'] }}</td>
+        <td class="stock-current">{{ p['stock_qty'] }}</td>
+        <td>
+          <input type="hidden" name="product_id" value="{{ p['id'] }}">
+          <input type="number" name="counted_qty" value="{{ p['stock_qty'] }}" min="0" required class="counted-input">
+        </td>
+        <td class="diff-cell">0 (sem diferença)</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <button type="submit" onclick="return confirm('Aplicar contagem do inventário?');">Aplicar inventário</button>
+  </form>
+</section>
+
+<script>
+  document.querySelectorAll('tr').forEach((row) => {
+    const stockCell = row.querySelector('.stock-current');
+    const input = row.querySelector('.counted-input');
+    const diffCell = row.querySelector('.diff-cell');
+    if (!stockCell || !input || !diffCell) return;
+
+    const updateDiff = () => {
+      const current = Number(stockCell.textContent || 0);
+      const counted = Number(input.value || 0);
+      const diff = counted - current;
+      if (diff > 0) {
+        diffCell.textContent = `+${diff} (a mais)`;
+        diffCell.style.color = '#0b7a0b';
+      } else if (diff < 0) {
+        diffCell.textContent = `${diff} (a menos)`;
+        diffCell.style.color = '#b00020';
+      } else {
+        diffCell.textContent = '0 (sem diferença)';
+        diffCell.style.color = '';
+      }
+    };
+
+    input.addEventListener('input', updateDiff);
+    updateDiff();
+  });
+</script>
+{% endblock %}

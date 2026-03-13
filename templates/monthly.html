@@ -14,10 +14,12 @@
       <td class="inline">
         <a class="action-link action-open" href="{{ url_for('monthly_management', month=m['month_key'], show=1) }}">Abrir</a>
         <a class="action-link action-export" href="{{ url_for('monthly_export', month_key=m['month_key']) }}">Baixar CSV</a>
+        {% if is_admin %}
         <form method="post" action="{{ url_for('monthly_change_status', month_key=m['month_key']) }}" class="inline">
           <input type="hidden" name="action" value="{{ 'open' if status == 'FECHADO' else 'close' }}">
           <button type="submit">{{ 'Reabrir' if status == 'FECHADO' else 'Fechar mês' }}</button>
         </form>
+        {% endif %}
       </td>
     </tr>
     {% else %}
@@ -59,9 +61,14 @@
         <td>R$ {{ '%.2f'|format(s['total']) }}</td>
         <td>{{ s['status']|label_status }}</td>
         <td>
+          {% if is_admin %}
           <form method="post" action="{{ url_for('monthly_delete_sale', sale_id=s['id']) }}" onsubmit="return confirm('Remover esta venda do mês?');">
+            <input type="hidden" name="month_key" value="{{ selected_month }}">
             <button type="submit" {% if selected_month_status == 'FECHADO' %}disabled{% endif %}>Remover</button>
           </form>
+          {% else %}
+          -
+          {% endif %}
         </td>
       </tr>
       {% else %}
