@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quadrinhas Drinks Vendas</title>
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename=favicon_path) }}">
+  <title>Sistema de Vendas</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename=favicon_path) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=asset_version) }}">
 </head>
 <body class="light-theme">
@@ -13,7 +13,7 @@
   <aside id="side-menu" class="side-menu">
     <div class="menu-header">
       <img src="{{ url_for('static', filename=logo_path) }}" alt="Logo da loja" class="store-logo" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
-      <h1 style="display:none;">Quadrinhas Drinks Vendas</h1>
+      <h1 style="display:none;">{{ system_name }}</h1>
     </div>
 
     <nav class="menu-nav">
@@ -26,14 +26,19 @@
       <a href="{{ url_for('reports') }}" title="Relatórios"><span>📈</span><small>Relatórios</small></a>
       <a href="{{ url_for('monthly_management') }}" title="Gerenciar mês"><span>🗓️</span><small>Mês</small></a>
       <a href="{{ url_for('sales_history') }}" title="Histórico"><span>🧾</span><small>Histórico</small></a>
+      {% if is_admin %}
+      <a href="{{ url_for('admin_users') }}" title="Admin"><span>🔐</span><small>Admin</small></a>
+      {% endif %}
       <a href="{{ url_for('logout') }}" title="Sair"><span>🚪</span><small>Sair</small></a>
     </nav>
 
+    {% if is_admin %}
     <div class="menu-actions">
       <form method="post" action="{{ url_for('reset_data') }}" onsubmit="return confirm('Atenção: dados de caixa e vendas serão apagados. Deseja continuar?');">
         <button class="danger-btn" type="submit" title="Apagar dados de caixa e vendas">🗑️</button>
       </form>
     </div>
+    {% endif %}
   </aside>
   {% endif %}
 

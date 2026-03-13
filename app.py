@@ -8,14 +8,16 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, Response, flash, g, redirect, render_template, request, session, url_for
+from werkzeug.utils import secure_filename
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "pdv.db"
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-change-me"
-app.config["LOGO_PATH"] = "img/logo.png"
-app.config["FAVICON_PATH"] = "img/favicon.png"
+app.config["LOGO_PATH"] = "logo_path.jpg"
+app.config["FAVICON_PATH"] = "img/favicon-vendas.svg"
+app.config["UPLOAD_FOLDER"] = BASE_DIR / "static" / "uploads"
 
 PAYMENT_METHODS = ["DINHEIRO", "PIX", "CARTAO_DEBITO", "CARTAO_CREDITO"]
 LOW_STOCK_THRESHOLD = 5
@@ -46,7 +48,9 @@ def init_db() -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'ADMIN'
+            role TEXT NOT NULL DEFAULT 'ADMIN',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            expires_at TEXT
         );
 
         CREATE TABLE IF NOT EXISTS products (
@@ -126,20 +130,107 @@ def init_db() -> None:
             note TEXT,
             FOREIGN KEY(product_id) REFERENCES products(id)
         );
+
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
         """
     )
+    user_columns = {row[1] for row in db.execute("PRAGMA table_info(users)").fetchall()}
+    if "is_active" not in user_columns:
+        db.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+    if "expires_at" not in user_columns:
+        db.execute("ALTER TABLE users ADD COLUMN expires_at TEXT")
+
+    marola = db.execute("SELECT id FROM users WHERE username = 'Marola'").fetchone()
+    admin_old = db.execute("SELECT id FROM users WHERE username = 'admin'").fetchone()
+    if marola:
+        db.execute(
+            "UPDATE users SET password = '$$$Acm@092002$$$', role = 'ADMIN', is_active = 1, expires_at = NULL WHERE username = 'Marola'"
+        )
+        if admin_old:
+            db.execute("DELETE FROM users WHERE username = 'admin'")
+    elif admin_old:
+        db.execute(
+            "UPDATE users SET username = 'Marola', password = '$$$Acm@092002$$$', role = 'ADMIN', is_active = 1, expires_at = NULL WHERE username = 'admin'"
+        )
+    else:
+        db.execute(
+            "INSERT INTO users (username, password, role, is_active, expires_at) VALUES ('Marola','$$$Acm@092002$$$','ADMIN',1,NULL)"
+        )
     db.execute(
-        "INSERT OR IGNORE INTO users (username, password, role) VALUES ('admin','admin123','ADMIN')"
+        "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('system_name', 'Quadrinhas Drinks Vendas')"
     )
+    db.execute(
+        "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('logo_path', ?)" ,
+        (app.config["LOGO_PATH"],),
+    )
+    logo_row = db.execute("SELECT value FROM system_settings WHERE key = 'logo_path'").fetchone()
+    if logo_row:
+        app.config["LOGO_PATH"] = logo_row[0]
+    app.config["UPLOAD_FOLDER"].mkdir(parents=True, exist_ok=True)
     db.commit()
     db.close()
+
+
+def get_system_name(db: sqlite3.Connection) -> str:
+    row = db.execute("SELECT value FROM system_settings WHERE key = 'system_name'").fetchone()
+    return row["value"] if row else "Quadrinhas Drinks Vendas"
 
 
 def require_login():
     if "user_id" not in session:
         flash("Faça login para acessar o sistema.", "warning")
         return redirect(url_for("login"))
+    user = get_current_user()
+    if not user:
+        session.clear()
+        flash("Sessão inválida. Faça login novamente.", "warning")
+        return redirect(url_for("login"))
+
+    if is_user_blocked(user):
+        if user["role"] != "ADMIN":
+            db = get_db()
+            db.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user["id"],))
+            db.commit()
+        session.clear()
+        flash("Seu acesso está bloqueado ou expirado. Contate o administrador.", "danger")
+        return redirect(url_for("login"))
     return None
+
+
+def require_admin():
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    user = get_current_user()
+    if not user or user["role"] != "ADMIN":
+        flash("Acesso permitido apenas para administrador.", "danger")
+        return redirect(url_for("dashboard"))
+    return None
+
+
+def get_current_user() -> sqlite3.Row | None:
+    if "current_user" in g:
+        return g.current_user
+    uid = session.get("user_id")
+    if not uid:
+        g.current_user = None
+        return None
+    g.current_user = get_db().execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+    return g.current_user
+
+
+def is_user_blocked(user: sqlite3.Row) -> bool:
+    if user["role"] == "ADMIN":
+        return False
+    if not bool(user["is_active"]):
+        return True
+    expires_at = user["expires_at"]
+    if expires_at:
+        return datetime.now() > datetime.fromisoformat(expires_at)
+    return False
 
 
 def now_iso() -> str:
@@ -200,10 +291,16 @@ app.jinja_env.filters["label_movement"] = label_movement
 
 @app.context_processor
 def inject_branding() -> dict[str, str]:
+    current_user = get_current_user()
+    is_admin = bool(current_user and current_user["role"] == "ADMIN")
+    db = get_db()
     return {
         "logo_path": app.config["LOGO_PATH"],
         "favicon_path": app.config["FAVICON_PATH"],
+        "system_name": get_system_name(db),
         "asset_version": int(datetime.now().timestamp()) // 3600,
+        "is_admin": is_admin,
+        "current_user": current_user,
     }
 
 
@@ -218,8 +315,12 @@ def login():
             (username, password),
         ).fetchone()
         if user:
+            if is_user_blocked(user):
+                flash("Acesso bloqueado ou expirado. Contate o administrador.", "danger")
+                return render_template("login.html")
             session["user_id"] = user["id"]
             session["username"] = user["username"]
+            session["role"] = user["role"]
             return redirect(url_for("dashboard"))
         flash("Usuário ou senha inválidos.", "danger")
     return render_template("login.html")
@@ -235,7 +336,7 @@ def logout():
 
 @app.post("/admin/reset-data")
 def reset_data():
-    redirect_resp = require_login()
+    redirect_resp = require_admin()
     if redirect_resp:
         return redirect_resp
 
@@ -249,6 +350,129 @@ def reset_data():
     db.commit()
     flash("Dados de caixa e vendas foram apagados com sucesso.", "warning")
     return redirect(url_for("dashboard"))
+
+
+@app.route("/admin/users", methods=["GET", "POST"])
+def admin_users():
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+
+    if request.method == "POST":
+        username = request.form["username"].strip()
+        password = request.form["password"].strip()
+        duration_days = int(request.form.get("duration_days", "30"))
+
+        if duration_days not in (30, 60, 90):
+            flash("Escolha uma validade entre 30, 60 ou 90 dias.", "warning")
+            return redirect(url_for("admin_users"))
+        if not username or not password:
+            flash("Usuário e senha são obrigatórios.", "warning")
+            return redirect(url_for("admin_users"))
+
+        expires_at = (datetime.now() + timedelta(days=duration_days)).isoformat(timespec="seconds")
+        try:
+            db.execute(
+                "INSERT INTO users (username, password, role, is_active, expires_at) VALUES (?, ?, 'USER', 1, ?)",
+                (username, password, expires_at),
+            )
+            db.commit()
+            flash("Usuário cliente criado com sucesso.", "success")
+        except sqlite3.IntegrityError:
+            flash("Nome de usuário já existe.", "danger")
+        return redirect(url_for("admin_users"))
+
+    users = db.execute("SELECT * FROM users ORDER BY role DESC, username ASC").fetchall()
+    return render_template("admin_users.html", users=users, now=now_iso())
+
+
+@app.post("/admin/users/<int:user_id>/update")
+def admin_update_user(user_id: int):
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        flash("Usuário não encontrado.", "warning")
+        return redirect(url_for("admin_users"))
+    if user["role"] == "ADMIN":
+        flash("Conta ADMIN não pode ser alterada por aqui.", "warning")
+        return redirect(url_for("admin_users"))
+
+    duration_days = int(request.form.get("duration_days", "30"))
+    if duration_days not in (30, 60, 90):
+        flash("Escolha uma validade entre 30, 60 ou 90 dias.", "warning")
+        return redirect(url_for("admin_users"))
+
+    action = request.form.get("action", "renew")
+    if action == "block":
+        db.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
+        flash("Usuário bloqueado.", "warning")
+    else:
+        expires_at = (datetime.now() + timedelta(days=duration_days)).isoformat(timespec="seconds")
+        db.execute("UPDATE users SET is_active = 1, expires_at = ? WHERE id = ?", (expires_at, user_id))
+        flash("Usuário reativado e prazo renovado.", "success")
+    db.commit()
+    return redirect(url_for("admin_users"))
+
+
+@app.post("/admin/users/<int:user_id>/delete")
+def admin_delete_user(user_id: int):
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        flash("Usuário não encontrado.", "warning")
+        return redirect(url_for("admin_users"))
+    if user["role"] == "ADMIN":
+        flash("Usuário ADMIN não pode ser removido.", "danger")
+        return redirect(url_for("admin_users"))
+    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    db.commit()
+    flash("Usuário removido com sucesso.", "warning")
+    return redirect(url_for("admin_users"))
+
+
+@app.post("/admin/settings")
+def admin_settings():
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+
+    system_name = request.form.get("system_name", "").strip()
+    logo_file = request.files.get("logo_file")
+
+    if system_name:
+        db.execute(
+            "INSERT INTO system_settings (key, value) VALUES ('system_name', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (system_name,),
+        )
+        flash("Nome do sistema atualizado.", "success")
+
+    if logo_file and logo_file.filename:
+        safe_name = secure_filename(logo_file.filename)
+        if safe_name:
+            ext = Path(safe_name).suffix.lower()
+            if ext in {".png", ".jpg", ".jpeg", ".webp", ".svg"}:
+                final_name = f"logo{ext}"
+                dest = app.config["UPLOAD_FOLDER"] / final_name
+                logo_file.save(dest)
+                app.config["LOGO_PATH"] = f"uploads/{final_name}"
+                db.execute(
+                    "INSERT INTO system_settings (key, value) VALUES ('logo_path', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (app.config["LOGO_PATH"],),
+                )
+                flash("Logo atualizada com sucesso.", "success")
+            else:
+                flash("Formato de logo inválido. Use PNG, JPG, WEBP ou SVG.", "danger")
+
+    db.commit()
+    return redirect(url_for("admin_users"))
 
 
 @app.route("/")
@@ -332,7 +556,7 @@ def product_update(product_id: int):
 
 @app.post("/products/<int:product_id>/delete")
 def product_delete(product_id: int):
-    redirect_resp = require_login()
+    redirect_resp = require_admin()
     if redirect_resp:
         return redirect_resp
     db = get_db()
@@ -750,7 +974,7 @@ def monthly_add_sale():
 
 @app.post("/monthly/<month_key>/status")
 def monthly_change_status(month_key: str):
-    redirect_resp = require_login()
+    redirect_resp = require_admin()
     if redirect_resp:
         return redirect_resp
     db = get_db()
@@ -823,7 +1047,7 @@ def mesa():
 
 @app.post("/mesa/<int:tab_id>/delete")
 def mesa_delete(tab_id: int):
-    redirect_resp = require_login()
+    redirect_resp = require_admin()
     if redirect_resp:
         return redirect_resp
     db = get_db()
@@ -861,7 +1085,7 @@ def mesa_update_total(tab_id: int):
 
 @app.post("/monthly/sales/<int:sale_id>/delete")
 def monthly_delete_sale(sale_id: int):
-    redirect_resp = require_login()
+    redirect_resp = require_admin()
     if redirect_resp:
         return redirect_resp
     db = get_db()
@@ -907,7 +1131,8 @@ def monthly_export(month_key: str):
         headers={"Content-Disposition": f"attachment; filename=faturamento_{month_key}.csv"},
     )
 
+init_db()
+
 
 if __name__ == "__main__":
-    init_db()
     app.run(host="0.0.0.0", port=5000, debug=True)
