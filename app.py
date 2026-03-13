@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from flask import Flask, Response, flash, g, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 BASE_DIR = Path(__file__).parent
@@ -143,22 +145,44 @@ def init_db() -> None:
     if "expires_at" not in user_columns:
         db.execute("ALTER TABLE users ADD COLUMN expires_at TEXT")
 
-    marola = db.execute("SELECT id FROM users WHERE username = 'Marola'").fetchone()
-    admin_old = db.execute("SELECT id FROM users WHERE username = 'admin'").fetchone()
+    admin_username = os.getenv("ADMIN_USERNAME", "Marola")
+    admin_password = os.getenv("ADMIN_PASSWORD")
+
+    marola = db.execute("SELECT id, password FROM users WHERE username = ?", (admin_username,)).fetchone()
+    admin_old = db.execute("SELECT id, password FROM users WHERE username = 'admin'").fetchone()
     if marola:
         db.execute(
-            "UPDATE users SET password = '$$$Acm@092002$$$', role = 'ADMIN', is_active = 1, expires_at = NULL WHERE username = 'Marola'"
+            "UPDATE users SET role = 'ADMIN', is_active = 1, expires_at = NULL WHERE username = ?",
+            (admin_username,),
         )
-        if admin_old:
+        if admin_password:
+            db.execute(
+                "UPDATE users SET password = ? WHERE username = ?",
+                (hash_password(admin_password), admin_username),
+            )
+        if admin_old and admin_username != "admin":
             db.execute("DELETE FROM users WHERE username = 'admin'")
     elif admin_old:
         db.execute(
-            "UPDATE users SET username = 'Marola', password = '$$$Acm@092002$$$', role = 'ADMIN', is_active = 1, expires_at = NULL WHERE username = 'admin'"
+            "UPDATE users SET username = ?, role = 'ADMIN', is_active = 1, expires_at = NULL WHERE username = 'admin'",
+            (admin_username,),
         )
+        if admin_password:
+            db.execute(
+                "UPDATE users SET password = ? WHERE username = ?",
+                (hash_password(admin_password), admin_username),
+            )
     else:
+        initial_password = admin_password or os.getenv("DEFAULT_ADMIN_PASSWORD", "admin")
         db.execute(
-            "INSERT INTO users (username, password, role, is_active, expires_at) VALUES ('Marola','$$$Acm@092002$$$','ADMIN',1,NULL)"
+            "INSERT INTO users (username, password, role, is_active, expires_at) VALUES (?, ?, 'ADMIN', 1, NULL)",
+            (admin_username, hash_password(initial_password)),
         )
+
+    users = db.execute("SELECT id, password FROM users").fetchall()
+    for user in users:
+        if not is_password_hashed(user[1]):
+            db.execute("UPDATE users SET password = ? WHERE id = ?", (hash_password(user[1]), user[0]))
     db.execute(
         "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('system_name', 'Quadrinhas Drinks Vendas')"
     )
@@ -177,6 +201,20 @@ def init_db() -> None:
 def get_system_name(db: sqlite3.Connection) -> str:
     row = db.execute("SELECT value FROM system_settings WHERE key = 'system_name'").fetchone()
     return row["value"] if row else "Quadrinhas Drinks Vendas"
+
+
+def is_password_hashed(password: str) -> bool:
+    return password.startswith("scrypt:") or password.startswith("pbkdf2:")
+
+
+def hash_password(password: str) -> str:
+    return generate_password_hash(password)
+
+
+def verify_password(stored_password: str, provided_password: str) -> bool:
+    if is_password_hashed(stored_password):
+        return check_password_hash(stored_password, provided_password)
+    return stored_password == provided_password
 
 
 def require_login():
@@ -310,11 +348,8 @@ def login():
         username = request.form["username"]
         password = request.form["password"]
         db = get_db()
-        user = db.execute(
-            "SELECT * FROM users WHERE username = ? AND password = ?",
-            (username, password),
-        ).fetchone()
-        if user:
+        user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        if user and verify_password(user["password"], password):
             if is_user_blocked(user):
                 flash("Acesso bloqueado ou expirado. Contate o administrador.", "danger")
                 return render_template("login.html")
@@ -375,7 +410,7 @@ def admin_users():
         try:
             db.execute(
                 "INSERT INTO users (username, password, role, is_active, expires_at) VALUES (?, ?, 'USER', 1, ?)",
-                (username, password, expires_at),
+                (username, hash_password(password), expires_at),
             )
             db.commit()
             flash("Usuário cliente criado com sucesso.", "success")
