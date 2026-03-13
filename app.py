@@ -1238,17 +1238,17 @@ def monthly_delete_sale(sale_id: int):
     db = get_db()
     sale = db.execute("SELECT * FROM sales WHERE id = ?", (sale_id,)).fetchone()
     if sale:
-        month_key = sale["created_at"][:7]
+        month_key = request.form.get("month_key", sale["created_at"][:7])
         if is_month_closed(db, month_key):
             flash(f"Mês {month_key} está fechado e não permite remoção de venda.", "danger")
-            return redirect(url_for("monthly_management", month=month_key))
+            return redirect(url_for("monthly_management", month=month_key, show=1))
         db.execute("DELETE FROM sale_items WHERE sale_id = ?", (sale_id,))
         db.execute("DELETE FROM sales WHERE id = ?", (sale_id,))
         db.commit()
         flash("Venda removida do mês.", "warning")
-        return redirect(url_for("monthly_management", month=month_key))
+        return redirect(url_for("monthly_management", month=month_key, show=1))
     flash("Venda não encontrada.", "danger")
-    return redirect(url_for("monthly_management"))
+    return redirect(url_for("monthly_management", show=1))
 
 
 @app.get("/monthly/<month_key>/export")
