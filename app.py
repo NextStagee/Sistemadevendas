@@ -4,11 +4,12 @@ import csv
 import io
 import os
 import sqlite3
+import tarfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, Response, flash, g, redirect, render_template, request, session, url_for
+from flask import Flask, Response, flash, g, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -20,6 +21,7 @@ app.secret_key = "dev-secret-change-me"
 app.config["LOGO_PATH"] = "logo_path.jpg"
 app.config["FAVICON_PATH"] = "img/favicon-vendas.svg"
 app.config["UPLOAD_FOLDER"] = BASE_DIR / "static" / "uploads"
+app.config["BACKUP_FOLDER"] = BASE_DIR / "backups"
 
 PAYMENT_METHODS = ["DINHEIRO", "PIX", "CARTAO_DEBITO", "CARTAO_CREDITO"]
 LOW_STOCK_THRESHOLD = 5
@@ -190,10 +192,14 @@ def init_db() -> None:
         "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('logo_path', ?)" ,
         (app.config["LOGO_PATH"],),
     )
+    db.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('backup_enabled', '1')")
+    db.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('backup_keep_days', '30')")
+    db.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('backup_last_run_date', '')")
     logo_row = db.execute("SELECT value FROM system_settings WHERE key = 'logo_path'").fetchone()
     if logo_row:
         app.config["LOGO_PATH"] = logo_row[0]
     app.config["UPLOAD_FOLDER"].mkdir(parents=True, exist_ok=True)
+    app.config["BACKUP_FOLDER"].mkdir(parents=True, exist_ok=True)
     db.commit()
     db.close()
 
@@ -201,6 +207,62 @@ def init_db() -> None:
 def get_system_name(db: sqlite3.Connection) -> str:
     row = db.execute("SELECT value FROM system_settings WHERE key = 'system_name'").fetchone()
     return row["value"] if row else "Quadrinhas Drinks Vendas"
+
+
+def get_setting(db: sqlite3.Connection, key: str, default: str = "") -> str:
+    row = db.execute("SELECT value FROM system_settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_setting(db: sqlite3.Connection, key: str, value: str) -> None:
+    db.execute(
+        "INSERT INTO system_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (key, value),
+    )
+
+
+def create_backup_archive() -> Path:
+    backup_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    backup_name = f"backup_{backup_time}.tar.gz"
+    backup_path = app.config["BACKUP_FOLDER"] / backup_name
+    db_snapshot_path = app.config["BACKUP_FOLDER"] / f"snapshot_{backup_time}.db"
+
+    source = sqlite3.connect(DB_PATH)
+    dest = sqlite3.connect(db_snapshot_path)
+    source.backup(dest)
+    dest.close()
+    source.close()
+
+    with tarfile.open(backup_path, "w:gz") as tar:
+        tar.add(db_snapshot_path, arcname="pdv.db")
+        if app.config["UPLOAD_FOLDER"].exists():
+            tar.add(app.config["UPLOAD_FOLDER"], arcname="uploads")
+
+    db_snapshot_path.unlink(missing_ok=True)
+    return backup_path
+
+
+def cleanup_old_backups(keep_days: int) -> None:
+    cutoff = datetime.now() - timedelta(days=keep_days)
+    for backup in app.config["BACKUP_FOLDER"].glob("backup_*.tar.gz"):
+        modified = datetime.fromtimestamp(backup.stat().st_mtime)
+        if modified < cutoff:
+            backup.unlink(missing_ok=True)
+
+
+def maybe_run_daily_backup() -> None:
+    db = get_db()
+    if get_setting(db, "backup_enabled", "1") != "1":
+        return
+    today = datetime.now().strftime("%Y-%m-%d")
+    last_run = get_setting(db, "backup_last_run_date", "")
+    if last_run == today:
+        return
+    keep_days = int(get_setting(db, "backup_keep_days", "30") or "30")
+    create_backup_archive()
+    cleanup_old_backups(keep_days)
+    set_setting(db, "backup_last_run_date", today)
+    db.commit()
 
 
 def is_password_hashed(password: str) -> bool:
@@ -327,6 +389,13 @@ app.jinja_env.filters["label_status"] = label_status
 app.jinja_env.filters["label_movement"] = label_movement
 
 
+@app.before_request
+def run_daily_backup() -> None:
+    if request.endpoint == "static":
+        return
+    maybe_run_daily_backup()
+
+
 @app.context_processor
 def inject_branding() -> dict[str, str]:
     current_user = get_current_user()
@@ -419,7 +488,23 @@ def admin_users():
         return redirect(url_for("admin_users"))
 
     users = db.execute("SELECT * FROM users ORDER BY role DESC, username ASC").fetchall()
-    return render_template("admin_users.html", users=users, now=now_iso())
+    backups = sorted(app.config["BACKUP_FOLDER"].glob("backup_*.tar.gz"), key=lambda p: p.stat().st_mtime, reverse=True)
+    backup_rows = [
+        {
+            "name": b.name,
+            "size_kb": round(b.stat().st_size / 1024, 1),
+            "created_at": datetime.fromtimestamp(b.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        for b in backups[:20]
+    ]
+    return render_template(
+        "admin_users.html",
+        users=users,
+        now=now_iso(),
+        backups=backup_rows,
+        backup_last_run=get_setting(db, "backup_last_run_date", "-"),
+        backup_keep_days=get_setting(db, "backup_keep_days", "30"),
+    )
 
 
 @app.post("/admin/users/<int:user_id>/update")
@@ -508,6 +593,33 @@ def admin_settings():
 
     db.commit()
     return redirect(url_for("admin_users"))
+
+
+@app.post("/admin/backups/run")
+def admin_run_backup():
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    keep_days = int(get_setting(db, "backup_keep_days", "30") or "30")
+    create_backup_archive()
+    cleanup_old_backups(keep_days)
+    set_setting(db, "backup_last_run_date", datetime.now().strftime("%Y-%m-%d"))
+    db.commit()
+    flash("Backup gerado com sucesso.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.get("/admin/backups/<path:backup_name>/download")
+def admin_download_backup(backup_name: str):
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    backup_path = (app.config["BACKUP_FOLDER"] / backup_name).resolve()
+    if app.config["BACKUP_FOLDER"].resolve() not in backup_path.parents or not backup_path.exists():
+        flash("Arquivo de backup não encontrado.", "warning")
+        return redirect(url_for("admin_users"))
+    return send_file(backup_path, as_attachment=True)
 
 
 @app.route("/")

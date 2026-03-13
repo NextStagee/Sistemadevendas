@@ -15,6 +15,34 @@
 </section>
 
 <section class="card">
+  <h2>Admin • Backup Diário</h2>
+  <p>Backup automático ativo: <strong>1 vez por dia</strong>. Retenção atual: {{ backup_keep_days }} dias.</p>
+  <p>Último backup automático: <strong>{{ backup_last_run }}</strong></p>
+  <form method="post" action="{{ url_for('admin_run_backup') }}">
+    <button type="submit">Gerar backup agora</button>
+  </form>
+
+  <h3>Arquivos de backup</h3>
+  <table>
+    <thead>
+      <tr><th>Arquivo</th><th>Data</th><th>Tamanho</th><th>Ação</th></tr>
+    </thead>
+    <tbody>
+      {% for b in backups %}
+      <tr>
+        <td>{{ b['name'] }}</td>
+        <td>{{ b['created_at'] }}</td>
+        <td>{{ b['size_kb'] }} KB</td>
+        <td><a href="{{ url_for('admin_download_backup', backup_name=b['name']) }}">Baixar</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">Nenhum backup gerado ainda.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
   <h2>Admin • Usuários</h2>
   <p>Cadastre clientes com validade de acesso de 30, 60 ou 90 dias.</p>
 
