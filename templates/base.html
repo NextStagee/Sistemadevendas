@@ -26,14 +26,19 @@
       <a href="{{ url_for('reports') }}" title="Relatórios"><span>📈</span><small>Relatórios</small></a>
       <a href="{{ url_for('monthly_management') }}" title="Gerenciar mês"><span>🗓️</span><small>Mês</small></a>
       <a href="{{ url_for('sales_history') }}" title="Histórico"><span>🧾</span><small>Histórico</small></a>
+      {% if is_admin %}
+      <a href="{{ url_for('admin_users') }}" title="Admin"><span>🔐</span><small>Admin</small></a>
+      {% endif %}
       <a href="{{ url_for('logout') }}" title="Sair"><span>🚪</span><small>Sair</small></a>
     </nav>
 
+    {% if is_admin %}
     <div class="menu-actions">
       <form method="post" action="{{ url_for('reset_data') }}" onsubmit="return confirm('Atenção: dados de caixa e vendas serão apagados. Deseja continuar?');">
         <button class="danger-btn" type="submit" title="Apagar dados de caixa e vendas">🗑️</button>
       </form>
     </div>
+    {% endif %}
   </aside>
   {% endif %}
 
