@@ -25,6 +25,37 @@ app.config["BACKUP_FOLDER"] = BASE_DIR / "backups"
 
 PAYMENT_METHODS = ["DINHEIRO", "PIX", "CARTAO_DEBITO", "CARTAO_CREDITO"]
 LOW_STOCK_THRESHOLD = 5
+TAB_LABELS = {
+    "dashboard": "Início",
+    "pdv": "PDV",
+    "mesa": "Mesa",
+    "cash": "Caixa",
+    "products": "Produtos",
+    "stock": "Estoque",
+    "reports": "Relatórios",
+    "monthly": "Mês",
+    "sales": "Histórico",
+}
+DEFAULT_USER_TABS = list(TAB_LABELS.keys())
+ENDPOINT_TAB_MAP = {
+    "dashboard": "dashboard",
+    "pdv": "pdv",
+    "mesa": "mesa",
+    "mesa_update_total": "mesa",
+    "cash": "cash",
+    "products": "products",
+    "product_update": "products",
+    "stock": "stock",
+    "stock_entry": "stock",
+    "stock_adjust": "stock",
+    "reports": "reports",
+    "monthly_management": "monthly",
+    "monthly_add_sale": "monthly",
+    "monthly_export": "monthly",
+    "sales_history": "sales",
+    "sale_receipt": "sales",
+    "cancel_sale": "sales",
+}
 
 
 def get_db() -> sqlite3.Connection:
@@ -146,6 +177,8 @@ def init_db() -> None:
         db.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
     if "expires_at" not in user_columns:
         db.execute("ALTER TABLE users ADD COLUMN expires_at TEXT")
+    if "allowed_tabs" not in user_columns:
+        db.execute("ALTER TABLE users ADD COLUMN allowed_tabs TEXT")
 
     admin_username = os.getenv("ADMIN_USERNAME", "Marola")
     admin_password = os.getenv("ADMIN_PASSWORD")
@@ -185,6 +218,11 @@ def init_db() -> None:
     for user in users:
         if not is_password_hashed(user[1]):
             db.execute("UPDATE users SET password = ? WHERE id = ?", (hash_password(user[1]), user[0]))
+    default_tabs_raw = ",".join(DEFAULT_USER_TABS)
+    db.execute(
+        "UPDATE users SET allowed_tabs = ? WHERE role != 'ADMIN' AND (allowed_tabs IS NULL OR allowed_tabs = '')",
+        (default_tabs_raw,),
+    )
     db.execute(
         "INSERT OR IGNORE INTO system_settings (key, value) VALUES ('system_name', 'Quadrinhas Drinks Vendas')"
     )
@@ -277,6 +315,49 @@ def verify_password(stored_password: str, provided_password: str) -> bool:
     if is_password_hashed(stored_password):
         return check_password_hash(stored_password, provided_password)
     return stored_password == provided_password
+
+
+def parse_allowed_tabs(raw_tabs: str | None) -> set[str]:
+    if not raw_tabs:
+        return set(DEFAULT_USER_TABS)
+    return {tab.strip() for tab in raw_tabs.split(",") if tab.strip() in TAB_LABELS}
+
+
+def user_allowed_tabs(user: sqlite3.Row | None) -> set[str]:
+    if not user:
+        return set()
+    if user["role"] == "ADMIN":
+        return set(DEFAULT_USER_TABS)
+    return parse_allowed_tabs(user["allowed_tabs"])
+
+
+def require_tab_access(tab_key: str):
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    user = get_current_user()
+    if not user:
+        flash("Sessão inválida. Faça login novamente.", "warning")
+        return redirect(url_for("login"))
+    if user["role"] == "ADMIN":
+        return None
+    if tab_key in user_allowed_tabs(user):
+        return None
+    flash("Você não tem permissão para acessar esta aba.", "danger")
+    allowed = user_allowed_tabs(user)
+    first_allowed = next((k for k in DEFAULT_USER_TABS if k in allowed), "dashboard")
+    endpoint_map = {
+        "dashboard": "dashboard",
+        "pdv": "pdv",
+        "mesa": "mesa",
+        "cash": "cash",
+        "products": "products",
+        "stock": "stock",
+        "reports": "reports",
+        "monthly": "monthly_management",
+        "sales": "sales_history",
+    }
+    return redirect(url_for(endpoint_map[first_allowed]))
 
 
 def require_login():
@@ -396,10 +477,22 @@ def run_daily_backup() -> None:
     maybe_run_daily_backup()
 
 
+@app.before_request
+def enforce_tab_permissions():
+    endpoint = request.endpoint or ""
+    if endpoint in {"static", "login", "logout"}:
+        return None
+    tab_key = ENDPOINT_TAB_MAP.get(endpoint)
+    if not tab_key:
+        return None
+    return require_tab_access(tab_key)
+
+
 @app.context_processor
 def inject_branding() -> dict[str, str]:
     current_user = get_current_user()
     is_admin = bool(current_user and current_user["role"] == "ADMIN")
+    allowed_tabs = user_allowed_tabs(current_user)
     db = get_db()
     return {
         "logo_path": app.config["LOGO_PATH"],
@@ -408,6 +501,8 @@ def inject_branding() -> dict[str, str]:
         "asset_version": int(datetime.now().timestamp()) // 3600,
         "is_admin": is_admin,
         "current_user": current_user,
+        "allowed_tabs": allowed_tabs,
+        "tab_labels": TAB_LABELS,
     }
 
 
@@ -477,9 +572,10 @@ def admin_users():
 
         expires_at = (datetime.now() + timedelta(days=duration_days)).isoformat(timespec="seconds")
         try:
+            allowed_tabs_raw = ",".join(DEFAULT_USER_TABS)
             db.execute(
-                "INSERT INTO users (username, password, role, is_active, expires_at) VALUES (?, ?, 'USER', 1, ?)",
-                (username, hash_password(password), expires_at),
+                "INSERT INTO users (username, password, role, is_active, expires_at, allowed_tabs) VALUES (?, ?, 'USER', 1, ?, ?)",
+                (username, hash_password(password), expires_at, allowed_tabs_raw),
             )
             db.commit()
             flash("Usuário cliente criado com sucesso.", "success")
@@ -501,6 +597,7 @@ def admin_users():
         "admin_users.html",
         users=users,
         now=now_iso(),
+        available_tabs=TAB_LABELS,
         backups=backup_rows,
         backup_last_run=get_setting(db, "backup_last_run_date", "-"),
         backup_keep_days=get_setting(db, "backup_keep_days", "30"),
@@ -535,6 +632,31 @@ def admin_update_user(user_id: int):
         db.execute("UPDATE users SET is_active = 1, expires_at = ? WHERE id = ?", (expires_at, user_id))
         flash("Usuário reativado e prazo renovado.", "success")
     db.commit()
+    return redirect(url_for("admin_users"))
+
+
+@app.post("/admin/users/<int:user_id>/tabs")
+def admin_update_user_tabs(user_id: int):
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        flash("Usuário não encontrado.", "warning")
+        return redirect(url_for("admin_users"))
+    if user["role"] == "ADMIN":
+        flash("Permissões de aba do ADMIN não podem ser alteradas.", "warning")
+        return redirect(url_for("admin_users"))
+
+    selected_tabs = request.form.getlist("allowed_tabs")
+    valid_tabs = [tab for tab in selected_tabs if tab in TAB_LABELS]
+    if not valid_tabs:
+        flash("Selecione ao menos uma aba para o usuário.", "warning")
+        return redirect(url_for("admin_users"))
+    db.execute("UPDATE users SET allowed_tabs = ? WHERE id = ?", (",".join(valid_tabs), user_id))
+    db.commit()
+    flash("Permissões de abas atualizadas.", "success")
     return redirect(url_for("admin_users"))
 
 

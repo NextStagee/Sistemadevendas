@@ -73,6 +73,7 @@
         <th>Perfil</th>
         <th>Status</th>
         <th>Validade</th>
+        <th>Abas permitidas</th>
         <th>Ações</th>
       </tr>
     </thead>
@@ -91,6 +92,24 @@
           {% endif %}
         </td>
         <td>{{ user['expires_at']|fmt_dt if user['expires_at'] else '-' }}</td>
+        <td>
+          {% if user['role'] != 'ADMIN' %}
+          {% set user_tabs = user['allowed_tabs'].split(',') if user['allowed_tabs'] else [] %}
+          <form method="post" action="{{ url_for('admin_update_user_tabs', user_id=user['id']) }}">
+            <div class="inline" style="gap:8px;flex-wrap:wrap;">
+              {% for tab_key, tab_label in available_tabs.items() %}
+              <label style="font-size:.8rem;">
+                <input type="checkbox" name="allowed_tabs" value="{{ tab_key }}" {% if tab_key in user_tabs %}checked{% endif %}>
+                {{ tab_label }}
+              </label>
+              {% endfor %}
+            </div>
+            <button type="submit">Salvar abas</button>
+          </form>
+          {% else %}
+          Todas
+          {% endif %}
+        </td>
         <td>
           {% if user['role'] != 'ADMIN' %}
           <form method="post" action="{{ url_for('admin_update_user', user_id=user['id']) }}" class="inline">
