@@ -253,6 +253,38 @@ a { color: var(--link); }
   border-radius: 0;
 }
 
+/* Inventário: lista com até 6 itens visíveis e rolagem */
+.inventory-list-window {
+  max-height: 345px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.inventory-list-window table {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+
+.inventory-diff {
+  font-weight: 600;
+}
+
+.inventory-diff-positive {
+  color: #0f9d58;
+}
+
+.inventory-diff-negative {
+  color: #d93025;
+}
+
+.inventory-diff-zero {
+  color: var(--muted);
+}
+
 /* Comprovante visual */
 .receipt-wrap {
   display: flex;
