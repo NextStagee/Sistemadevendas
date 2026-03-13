@@ -35,6 +35,9 @@
       {% if is_admin or 'stock' in allowed_tabs %}
       <a href="{{ url_for('stock') }}" title="Estoque"><span>🏷️</span><small>Estoque</small></a>
       {% endif %}
+      {% if is_admin or 'inventory' in allowed_tabs %}
+      <a href="{{ url_for('inventory') }}" title="Inventário"><span>📋</span><small>Inventário</small></a>
+      {% endif %}
       {% if is_admin or 'reports' in allowed_tabs %}
       <a href="{{ url_for('reports') }}" title="Relatórios"><span>📈</span><small>Relatórios</small></a>
       {% endif %}

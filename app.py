@@ -32,6 +32,7 @@ TAB_LABELS = {
     "cash": "Caixa",
     "products": "Produtos",
     "stock": "Estoque",
+    "inventory": "Inventário",
     "reports": "Relatórios",
     "monthly": "Mês",
     "sales": "Histórico",
@@ -48,6 +49,8 @@ ENDPOINT_TAB_MAP = {
     "stock": "stock",
     "stock_entry": "stock",
     "stock_adjust": "stock",
+    "inventory": "inventory",
+    "inventory_apply": "inventory",
     "reports": "reports",
     "monthly_management": "monthly",
     "monthly_add_sale": "monthly",
@@ -353,6 +356,7 @@ def require_tab_access(tab_key: str):
         "cash": "cash",
         "products": "products",
         "stock": "stock",
+        "inventory": "inventory",
         "reports": "reports",
         "monthly": "monthly_management",
         "sales": "sales_history",
@@ -895,6 +899,50 @@ def stock():
         """
     ).fetchall()
     return render_template("stock.html", products=products, movements=movements, low_threshold=LOW_STOCK_THRESHOLD)
+
+
+@app.route("/inventory")
+def inventory():
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    products = db.execute("SELECT * FROM products ORDER BY name").fetchall()
+    return render_template("inventory.html", products=products)
+
+
+@app.post("/inventory/apply")
+def inventory_apply():
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    product_ids = request.form.getlist("product_id")
+    counted_values = request.form.getlist("counted_qty")
+    updates = 0
+
+    for pid_raw, counted_raw in zip(product_ids, counted_values):
+        pid = int(pid_raw)
+        counted = int(counted_raw)
+        current = db.execute("SELECT id, stock_qty FROM products WHERE id = ?", (pid,)).fetchone()
+        if not current:
+            continue
+        diff = counted - int(current["stock_qty"])
+        if diff == 0:
+            continue
+        db.execute("UPDATE products SET stock_qty = ? WHERE id = ?", (counted, pid))
+        db.execute(
+            "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at) VALUES (?, 'ADJUST', ?, ?, ?)",
+            (pid, diff, "Ajuste por inventário", now_iso()),
+        )
+        updates += 1
+
+    db.commit()
+    if updates:
+        flash(f"Inventário aplicado em {updates} produto(s).", "success")
+    else:
+        flash("Nenhuma diferença encontrada no inventário.", "info")
+    return redirect(url_for("inventory"))
 
 
 @app.route("/pdv", methods=["GET", "POST"])
