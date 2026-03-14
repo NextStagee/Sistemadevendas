@@ -46,11 +46,9 @@
             <form method="post" action="{{ url_for('product_duplicate', product_id=p['id']) }}">
               <button type="submit">Duplicar</button>
             </form>
-            {% if is_admin %}
             <form method="post" action="{{ url_for('product_delete', product_id=p['id']) }}" onsubmit="return confirm('Deseja remover este produto?');">
               <button type="submit">Remover</button>
             </form>
-            {% endif %}
           </td>
       </tr>
     {% endfor %}

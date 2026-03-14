@@ -864,7 +864,7 @@ def product_update(product_id: int):
 
 @app.post("/products/<int:product_id>/delete")
 def product_delete(product_id: int):
-    redirect_resp = require_admin()
+    redirect_resp = require_login()
     if redirect_resp:
         return redirect_resp
     db = get_db()
