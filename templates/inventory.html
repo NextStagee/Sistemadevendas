@@ -7,19 +7,11 @@
     <a class="action-link action-export" href="{{ url_for('inventory_export') }}">Exportar Excel (CSV)</a>
   </div>
   <form method="post" action="{{ url_for('inventory_apply') }}">
-    <label for="inventory-search">Pesquisar item no inventário</label>
-    <input
-      id="inventory-search"
-      type="search"
-      placeholder="Digite o nome do item..."
-      autocomplete="off"
-    >
-
     <div class="inventory-list-window">
       <table>
         <tr><th>Código</th><th>Produto</th><th>Estoque atual</th><th>Contagem física</th><th>Diferença</th></tr>
         {% for p in products %}
-        <tr class="inventory-row" data-product-name="{{ p['name']|lower }}" data-stock-qty="{{ p['stock_qty'] }}">
+        <tr class="inventory-row" data-stock-qty="{{ p['stock_qty'] }}">
           <td>{{ p['code'] or '-' }}</td>
           <td>{{ p['name'] }}</td>
           <td class="inventory-stock-qty">{{ p['stock_qty'] }}</td>
@@ -37,7 +29,6 @@
 </section>
 
 <script>
-  const inventorySearchInput = document.getElementById('inventory-search');
   const inventoryRows = document.querySelectorAll('.inventory-row');
 
   const updateInventoryDifference = (row) => {
@@ -64,14 +55,6 @@
     diffCell.textContent = 'Sem diferença';
     diffCell.classList.add('inventory-diff-zero');
   };
-
-  inventorySearchInput?.addEventListener('input', () => {
-    const term = inventorySearchInput.value.trim().toLowerCase();
-    inventoryRows.forEach((row) => {
-      const name = row.dataset.productName || '';
-      row.style.display = name.includes(term) ? '' : 'none';
-    });
-  });
 
   inventoryRows.forEach((row) => {
     const countedInput = row.querySelector('.inventory-counted-input');
