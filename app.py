@@ -28,7 +28,7 @@ LOW_STOCK_THRESHOLD = 5
 TAB_LABELS = {
     "dashboard": "Início",
     "pdv": "PDV",
-    "mesa": "Mesa",
+    "mesa": "Em Aberto",
     "cash": "Caixa",
     "products": "Produtos",
     "stock": "Estoque",
@@ -43,6 +43,8 @@ ENDPOINT_TAB_MAP = {
     "pdv": "pdv",
     "mesa": "mesa",
     "mesa_update_total": "mesa",
+    "mesa_delete": "mesa",
+    "mesa_close": "mesa",
     "cash": "cash",
     "products": "products",
     "product_update": "products",
@@ -1449,18 +1451,66 @@ def mesa():
 
 @app.post("/mesa/<int:tab_id>/delete")
 def mesa_delete(tab_id: int):
-    redirect_resp = require_admin()
+    redirect_resp = require_login()
     if redirect_resp:
         return redirect_resp
     db = get_db()
-    row = db.execute("SELECT id FROM open_tabs WHERE id = ?", (tab_id,)).fetchone()
+    row = db.execute("SELECT * FROM open_tabs WHERE id = ?", (tab_id,)).fetchone()
     if not row:
         flash("Registro de fiado não encontrado.", "warning")
         return redirect(url_for("mesa"))
+    db.execute(
+        "UPDATE products SET stock_qty = stock_qty + ? WHERE id = ?",
+        (int(row["quantity"]), int(row["product_id"])),
+    )
     db.execute("DELETE FROM open_tabs WHERE id = ?", (tab_id,))
     db.commit()
-    flash("Cliente removido da lista de fiados.", "warning")
+    flash("Fiado cancelado e estoque devolvido.", "warning")
     return redirect(url_for("mesa"))
+
+
+@app.post("/mesa/<int:tab_id>/close")
+def mesa_close(tab_id: int):
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    row = db.execute("SELECT * FROM open_tabs WHERE id = ?", (tab_id,)).fetchone()
+    if not row:
+        flash("Registro de fiado não encontrado.", "warning")
+        return redirect(url_for("mesa"))
+
+    subtotal = float(row["quantity"]) * float(row["unit_price"])
+    discount = float(row["discount"])
+    total = max(float(row["total_debt"]), 0)
+
+    cur = db.execute(
+        """
+        INSERT INTO sales (created_at, subtotal, discount, total, payment_method, status, cancellation_reason, cash_session_id, performed_by)
+        VALUES (?, ?, ?, ?, 'DINHEIRO', 'ACTIVE', ?, NULL, ?)
+        """,
+        (now_iso(), subtotal, discount, total, f"FIADO FECHADO - {row['client_name']}", actor_username()),
+    )
+    sale_id = int(cur.lastrowid)
+
+    db.execute(
+        """
+        INSERT INTO sale_items (sale_id, product_id, product_name, quantity, unit_price, total_price)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            sale_id,
+            int(row["product_id"]),
+            row["product_name"],
+            int(row["quantity"]),
+            float(row["unit_price"]),
+            float(row["quantity"]) * float(row["unit_price"]),
+        ),
+    )
+    db.execute("DELETE FROM open_tabs WHERE id = ?", (tab_id,))
+    db.commit()
+    flash(f"Fiado fechado com sucesso na venda #{sale_id}.", "success")
+    return redirect(url_for("sale_receipt", sale_id=sale_id))
 
 
 @app.post("/mesa/<int:tab_id>/update-total")
