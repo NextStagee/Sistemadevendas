@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <section class="card">
-  <h2>Mesa - Controle de Fiado</h2>
+  <h2>Em Aberto - Controle de Fiado</h2>
   <form method="post" class="grid three">
     <label>Cliente
       <input name="client_name" required placeholder="Nome do cliente">
@@ -9,7 +9,7 @@
     <label>Produto
       <select name="product_id" required>
         {% for p in products %}
-        <option value="{{ p['id'] }}">{{ p['name'] }} (Estoque: {{ p['stock_qty'] }})</option>
+        <option value="{{ p['id'] }}">{{ p['code'] or ('ID-' ~ p['id']) }} - {{ p['name'] }} (Estoque: {{ p['stock_qty'] }})</option>
         {% endfor %}
       </select>
     </label>
@@ -54,13 +54,13 @@
         </form>
       </td>
       <td>
-        {% if is_admin %}
-        <form method="post" action="{{ url_for('mesa_delete', tab_id=tab['id']) }}" onsubmit="return confirm('Remover cliente da lista de fiados?');">
-          <button type="submit">Remover</button>
+        <form method="post" action="{{ url_for('mesa_update_total', tab_id=tab['id']) }}" class="inline">
+          <input type="hidden" name="total_debt" value="0">
+          <button type="submit">Pagou</button>
         </form>
-        {% else %}
-        -
-        {% endif %}
+        <form method="post" action="{{ url_for('mesa_delete', tab_id=tab['id']) }}" onsubmit="return confirm('Remover cliente da lista de fiados?');">
+          <button type="submit">Apagar - Controle de Fiado</button>
+        </form>
       </td>
     </tr>
     {% else %}

@@ -28,7 +28,7 @@ LOW_STOCK_THRESHOLD = 5
 TAB_LABELS = {
     "dashboard": "Início",
     "pdv": "PDV",
-    "mesa": "Mesa",
+    "mesa": "Em Aberto",
     "cash": "Caixa",
     "products": "Produtos",
     "stock": "Estoque",
@@ -43,6 +43,7 @@ ENDPOINT_TAB_MAP = {
     "pdv": "pdv",
     "mesa": "mesa",
     "mesa_update_total": "mesa",
+    "mesa_delete": "mesa",
     "cash": "cash",
     "products": "products",
     "product_update": "products",
@@ -1449,7 +1450,7 @@ def mesa():
 
 @app.post("/mesa/<int:tab_id>/delete")
 def mesa_delete(tab_id: int):
-    redirect_resp = require_admin()
+    redirect_resp = require_login()
     if redirect_resp:
         return redirect_resp
     db = get_db()

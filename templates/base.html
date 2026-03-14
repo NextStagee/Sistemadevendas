@@ -24,7 +24,7 @@
       <a href="{{ url_for('pdv') }}" title="PDV"><span>🛒</span><small>PDV</small></a>
       {% endif %}
       {% if is_admin or 'mesa' in allowed_tabs %}
-      <a href="{{ url_for('mesa') }}" title="Mesa"><span>🪑</span><small>Mesa</small></a>
+      <a href="{{ url_for('mesa') }}" title="Em Aberto"><span>📒</span><small>Em Aberto</small></a>
       {% endif %}
       {% if is_admin or 'cash' in allowed_tabs %}
       <a href="{{ url_for('cash') }}" title="Caixa"><span>💰</span><small>Caixa</small></a>
