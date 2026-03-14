@@ -180,6 +180,15 @@ def init_db() -> None:
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS business_modules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            pdv_label TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
+        );
         """
     )
     user_columns = {row[1] for row in db.execute("PRAGMA table_info(users)").fetchall()}
@@ -255,6 +264,14 @@ def init_db() -> None:
     db.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('backup_enabled', '1')")
     db.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('backup_keep_days', '30')")
     db.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('backup_last_run_date', '')")
+    db.execute(
+        "INSERT OR IGNORE INTO business_modules (code, name, pdv_label, is_active, created_at) VALUES ('PDV1', 'EMPRESA 1', 'PDV 1', 1, ?)",
+        (now_iso(),),
+    )
+    db.execute(
+        "INSERT OR IGNORE INTO business_modules (code, name, pdv_label, is_active, created_at) VALUES ('PDV2', 'EMPRESA 2', 'PDV 2', 1, ?)",
+        (now_iso(),),
+    )
     logo_row = db.execute("SELECT value FROM system_settings WHERE key = 'logo_path'").fetchone()
     if logo_row:
         app.config["LOGO_PATH"] = logo_row[0]
@@ -354,6 +371,28 @@ def user_allowed_tabs(user: sqlite3.Row | None) -> set[str]:
     if user["role"] == "ADMIN":
         return set(DEFAULT_USER_TABS)
     return parse_allowed_tabs(user["allowed_tabs"])
+
+
+def get_modules(db: sqlite3.Connection, only_active: bool = True) -> list[sqlite3.Row]:
+    query = "SELECT * FROM business_modules"
+    params: tuple[Any, ...] = ()
+    if only_active:
+        query += " WHERE is_active = 1"
+    query += " ORDER BY id ASC"
+    return db.execute(query, params).fetchall()
+
+
+def get_current_module(db: sqlite3.Connection) -> sqlite3.Row | None:
+    modules = get_modules(db, only_active=True)
+    if not modules:
+        return None
+    module_id = int(session.get("module_id") or 0)
+    current = next((module for module in modules if int(module["id"]) == module_id), None)
+    if current:
+        return current
+    fallback = modules[0]
+    session["module_id"] = int(fallback["id"])
+    return fallback
 
 
 def require_tab_access(tab_key: str):
@@ -528,12 +567,26 @@ def enforce_tab_permissions():
     return require_tab_access(tab_key)
 
 
+@app.before_request
+def ensure_module_context():
+    if request.endpoint in {"static", "login", "logout"}:
+        return None
+    if "user_id" not in session:
+        return None
+    db = get_db()
+    if get_current_module(db) is None:
+        flash("Nenhum módulo ativo configurado. Cadastre um módulo na área ADMIN.", "warning")
+    return None
+
+
 @app.context_processor
 def inject_branding() -> dict[str, str]:
     current_user = get_current_user()
     is_admin = bool(current_user and current_user["role"] == "ADMIN")
     allowed_tabs = user_allowed_tabs(current_user)
     db = get_db()
+    active_modules = get_modules(db, only_active=True)
+    current_module = get_current_module(db) if current_user else None
     return {
         "logo_path": app.config["LOGO_PATH"],
         "favicon_path": app.config["FAVICON_PATH"],
@@ -543,6 +596,8 @@ def inject_branding() -> dict[str, str]:
         "current_user": current_user,
         "allowed_tabs": allowed_tabs,
         "tab_labels": TAB_LABELS,
+        "modules": active_modules,
+        "current_module": current_module,
     }
 
 
@@ -560,6 +615,9 @@ def login():
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             session["role"] = user["role"]
+            module = get_current_module(db)
+            if module:
+                session["module_id"] = int(module["id"])
             return redirect(url_for("dashboard"))
         flash("Usuário ou senha inválidos.", "danger")
     return render_template("login.html")
@@ -569,6 +627,22 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.post("/modules/select")
+def select_module():
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    selected_id = int(request.form.get("module_id", "0") or 0)
+    module = db.execute("SELECT * FROM business_modules WHERE id = ? AND is_active = 1", (selected_id,)).fetchone()
+    if module:
+        session["module_id"] = int(module["id"])
+        flash(f"Módulo ativo: {module['name']} ({module['pdv_label']}).", "success")
+    else:
+        flash("Módulo selecionado é inválido ou está inativo.", "warning")
+    return redirect(request.referrer or url_for("dashboard"))
 
 
 
@@ -641,8 +715,41 @@ def admin_users():
         backups=backup_rows,
         backup_last_run=get_setting(db, "backup_last_run_date", "-"),
         backup_keep_days=get_setting(db, "backup_keep_days", "30"),
+        modules=db.execute("SELECT * FROM business_modules ORDER BY id ASC").fetchall(),
     )
 
+
+
+
+@app.post("/admin/modules")
+def admin_create_module():
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+
+    name = normalize_upper(request.form.get("module_name", ""))
+    pdv_label = normalize_upper(request.form.get("pdv_label", ""))
+
+    if not name or not pdv_label:
+        flash("Informe nome da empresa e identificação do PDV.", "warning")
+        return redirect(url_for("admin_users"))
+
+    last_id = db.execute("SELECT COALESCE(MAX(id), 0) FROM business_modules").fetchone()[0]
+    next_number = int(last_id) + 1
+    code = f"PDV{next_number}"
+
+    try:
+        db.execute(
+            "INSERT INTO business_modules (code, name, pdv_label, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
+            (code, name, pdv_label, now_iso()),
+        )
+        db.commit()
+        flash(f"Módulo {name} criado com sucesso ({pdv_label}).", "success")
+    except sqlite3.IntegrityError:
+        flash("Não foi possível criar o módulo. Tente novamente.", "danger")
+
+    return redirect(url_for("admin_users"))
 
 @app.post("/admin/users/<int:user_id>/update")
 def admin_update_user(user_id: int):
