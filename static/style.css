@@ -25,6 +25,7 @@ body {
   color: var(--text);
   margin: 0;
   min-height: 100vh;
+  text-transform: uppercase;
 }
 
 body.light-theme {
@@ -218,6 +219,10 @@ body.light-theme button:hover {
 .inline { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
 .inline input, .inline button { width: auto; }
 
+#global-table-filter {
+  max-width: 420px;
+}
+
 .flash { padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid var(--border); }
 .success { background: var(--success); }
 .danger { background: var(--danger); }
@@ -251,6 +256,38 @@ a { color: var(--link); }
   margin: 0;
   border: none;
   border-radius: 0;
+}
+
+/* Inventário: lista com até 6 itens visíveis e rolagem */
+.inventory-list-window {
+  max-height: 345px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.inventory-list-window table {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+
+.inventory-diff {
+  font-weight: 600;
+}
+
+.inventory-diff-positive {
+  color: #0f9d58;
+}
+
+.inventory-diff-negative {
+  color: #d93025;
+}
+
+.inventory-diff-zero {
+  color: var(--muted);
 }
 
 /* Comprovante visual */
@@ -362,3 +399,54 @@ a { color: var(--link); }
 .menu-nav a { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02); }
 .menu-nav a:hover { box-shadow: 0 0 0 1px rgba(230, 120, 23, 0.34), 0 8px 20px rgba(230, 120, 23, 0.22); }
 .card { backdrop-filter: blur(4px); }
+
+
+.floating-calc-toggle {
+  position: fixed;
+  top: 22px;
+  right: 16px;
+  z-index: 40;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--primary);
+  color: #fff;
+  font-size: 1.25rem;
+  box-shadow: var(--shadow);
+}
+
+.floating-calc-panel {
+  position: fixed;
+  top: 78px;
+  right: 16px;
+  z-index: 39;
+  width: min(340px, calc(100vw - 32px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+  display: none;
+}
+
+.floating-calc-panel.open {
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .floating-calc-toggle {
+    top: 16px;
+    right: 14px;
+    width: 44px;
+    height: 44px;
+    font-size: 1.1rem;
+  }
+
+  .floating-calc-panel {
+    top: 66px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}

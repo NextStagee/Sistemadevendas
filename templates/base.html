@@ -24,7 +24,7 @@
       <a href="{{ url_for('pdv') }}" title="PDV"><span>🛒</span><small>PDV</small></a>
       {% endif %}
       {% if is_admin or 'mesa' in allowed_tabs %}
-      <a href="{{ url_for('mesa') }}" title="Mesa"><span>🪑</span><small>Mesa</small></a>
+      <a href="{{ url_for('mesa') }}" title="Em Aberto"><span>📒</span><small>Em Aberto</small></a>
       {% endif %}
       {% if is_admin or 'cash' in allowed_tabs %}
       <a href="{{ url_for('cash') }}" title="Caixa"><span>💰</span><small>Caixa</small></a>
@@ -64,6 +64,12 @@
   {% endif %}
 
   <main class="app-main {% if session.get('user_id') %}with-sidebar{% endif %}">
+    {% if session.get('user_id') and request.endpoint in ['products', 'stock', 'inventory'] %}
+    <section class="card">
+      <label for="global-table-filter">Filtro geral (tabelas da tela)</label>
+      <input id="global-table-filter" type="search" placeholder="Filtrar por qualquer texto..." autocomplete="off">
+    </section>
+    {% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}
         <div class="flash {{ category }}">{{ message }}</div>
@@ -71,6 +77,17 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+
+  <button id="floating-calc-toggle" class="floating-calc-toggle" type="button" aria-label="Abrir calculadora" title="Calculadora">🧮</button>
+  <section id="floating-calc-panel" class="floating-calc-panel" aria-hidden="true">
+    <h3>Calculadora</h3>
+    <div class="inline">
+      <input id="floating-calc-expression" type="text" placeholder="Ex: (10+5)*2" autocomplete="off">
+      <button type="button" id="floating-calc-eval-btn">Calcular</button>
+    </div>
+    <p id="floating-calc-result" class="inventory-diff-zero" style="margin-top:8px;">RESULTADO: 0</p>
+  </section>
+
 
   <script>
     const body = document.body;
@@ -83,6 +100,64 @@
         body.classList.toggle('menu-collapsed');
       });
     }
+
+    const globalTableFilter = document.getElementById('global-table-filter');
+    globalTableFilter?.addEventListener('input', () => {
+      const term = globalTableFilter.value.trim().toLowerCase();
+      document.querySelectorAll('table').forEach((table) => {
+        const rows = table.querySelectorAll('tr');
+        rows.forEach((row, index) => {
+          if (index === 0) return;
+          const text = (row.textContent || '').toLowerCase();
+          row.style.display = text.includes(term) ? '' : 'none';
+        });
+      });
+    });
+
+    document.querySelectorAll('input[type="text"], input[type="search"], textarea').forEach((field) => {
+      field.addEventListener('input', () => {
+        field.value = field.value.toUpperCase();
+      });
+    });
+
+    const floatingCalcToggle = document.getElementById('floating-calc-toggle');
+    const floatingCalcPanel = document.getElementById('floating-calc-panel');
+    const floatingCalcInput = document.getElementById('floating-calc-expression');
+    const floatingCalcButton = document.getElementById('floating-calc-eval-btn');
+    const floatingCalcResult = document.getElementById('floating-calc-result');
+
+    const evalFloatingCalc = () => {
+      const exp = (floatingCalcInput?.value || '').trim();
+      if (!exp) {
+        floatingCalcResult.textContent = 'RESULTADO: 0';
+        return;
+      }
+      const safe = /^[0-9+\-*/().\s,]+$/.test(exp);
+      if (!safe) {
+        floatingCalcResult.textContent = 'RESULTADO: EXPRESSÃO INVÁLIDA';
+        return;
+      }
+      try {
+        const normalized = exp.replace(',', '.');
+        const value = Function(`"use strict"; return (${normalized})`)();
+        floatingCalcResult.textContent = `RESULTADO: ${Number(value).toFixed(2)}`;
+      } catch {
+        floatingCalcResult.textContent = 'RESULTADO: ERRO AO CALCULAR';
+      }
+    };
+
+    floatingCalcToggle?.addEventListener('click', () => {
+      const isOpen = floatingCalcPanel.classList.toggle('open');
+      floatingCalcPanel.setAttribute('aria-hidden', String(!isOpen));
+    });
+
+    floatingCalcButton?.addEventListener('click', evalFloatingCalc);
+    floatingCalcInput?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        evalFloatingCalc();
+      }
+    });
 
   </script>
 </body>

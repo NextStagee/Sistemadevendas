@@ -27,10 +27,11 @@
 <section class="card">
   <h3>Gerenciar produtos</h3>
   <table>
-    <tr><th>Nome</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Estoque</th><th>Ações</th></tr>
+    <tr><th>Código (ID)</th><th>Nome</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Estoque</th><th>Ações</th></tr>
     {% for p in products %}
       <tr>
         <form method="post" action="{{ url_for('product_update', product_id=p['id']) }}">
+          <td><strong>{{ p['code'] or ('ID-' ~ p['id']) }}</strong></td>
           <td><input name="name" value="{{ p['name'] }}" required></td>
           <td><input name="category" value="{{ p['category'] }}" required></td>
           <td><input type="number" step="0.01" name="cost_price" value="{{ '%.2f'|format(p['cost_price']) }}" required></td>
@@ -40,14 +41,16 @@
           <td class="inline">
             <button type="submit">Salvar</button>
         </form>
-            {% if is_admin %}
+            <form method="post" action="{{ url_for('product_duplicate', product_id=p['id']) }}">
+              <button type="submit">Duplicar</button>
+            </form>
             <form method="post" action="{{ url_for('product_delete', product_id=p['id']) }}" onsubmit="return confirm('Deseja remover este produto?');">
               <button type="submit">Remover</button>
             </form>
-            {% endif %}
           </td>
       </tr>
     {% endfor %}
   </table>
 </section>
+
 {% endblock %}

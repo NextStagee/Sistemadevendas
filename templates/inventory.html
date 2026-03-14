@@ -3,21 +3,63 @@
 <section class="card">
   <h2>Inventário • Batida de Estoque</h2>
   <p>Informe a contagem física para cada produto e clique em aplicar. O sistema ajustará o estoque automaticamente.</p>
+  <div class="inline" style="margin-bottom:10px;">
+    <a class="action-link action-export" href="{{ url_for('inventory_export') }}">Exportar Excel (CSV)</a>
+  </div>
   <form method="post" action="{{ url_for('inventory_apply') }}">
-    <table>
-      <tr><th>Produto</th><th>Estoque atual</th><th>Contagem física</th></tr>
-      {% for p in products %}
-      <tr>
-        <td>{{ p['name'] }}</td>
-        <td>{{ p['stock_qty'] }}</td>
-        <td>
-          <input type="hidden" name="product_id" value="{{ p['id'] }}">
-          <input type="number" name="counted_qty" value="{{ p['stock_qty'] }}" min="0" required>
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
+    <div class="inventory-list-window">
+      <table>
+        <tr><th>Código (ID)</th><th>Produto</th><th>Estoque atual</th><th>Contagem física</th><th>Diferença</th></tr>
+        {% for p in products %}
+        <tr class="inventory-row" data-stock-qty="{{ p['stock_qty'] }}">
+          <td>{{ p['code'] or ('ID-' ~ p['id']) }}</td>
+          <td>{{ p['name'] }}</td>
+          <td class="inventory-stock-qty">{{ p['stock_qty'] }}</td>
+          <td>
+            <input type="hidden" name="product_id" value="{{ p['id'] }}">
+            <input class="inventory-counted-input" type="number" name="counted_qty" value="{{ p['stock_qty'] }}" min="0" required>
+          </td>
+          <td class="inventory-diff inventory-diff-zero">Sem diferença</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
     <button type="submit" onclick="return confirm('Aplicar contagem do inventário?');">Aplicar inventário</button>
   </form>
 </section>
+
+<script>
+  const inventoryRows = document.querySelectorAll('.inventory-row');
+
+  const updateInventoryDifference = (row) => {
+    const stockQty = Number(row.dataset.stockQty || 0);
+    const countedInput = row.querySelector('.inventory-counted-input');
+    const diffCell = row.querySelector('.inventory-diff');
+    const countedQty = Number(countedInput?.value || 0);
+    const difference = countedQty - stockQty;
+
+    diffCell.classList.remove('inventory-diff-zero', 'inventory-diff-positive', 'inventory-diff-negative');
+
+    if (difference > 0) {
+      diffCell.textContent = `A mais: +${difference}`;
+      diffCell.classList.add('inventory-diff-positive');
+      return;
+    }
+
+    if (difference < 0) {
+      diffCell.textContent = `A menos: ${difference}`;
+      diffCell.classList.add('inventory-diff-negative');
+      return;
+    }
+
+    diffCell.textContent = 'Sem diferença';
+    diffCell.classList.add('inventory-diff-zero');
+  };
+
+  inventoryRows.forEach((row) => {
+    const countedInput = row.querySelector('.inventory-counted-input');
+    countedInput?.addEventListener('input', () => updateInventoryDifference(row));
+    updateInventoryDifference(row);
+  });
+</script>
 {% endblock %}

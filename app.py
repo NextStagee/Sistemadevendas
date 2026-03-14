@@ -28,7 +28,7 @@ LOW_STOCK_THRESHOLD = 5
 TAB_LABELS = {
     "dashboard": "Início",
     "pdv": "PDV",
-    "mesa": "Mesa",
+    "mesa": "Em Aberto",
     "cash": "Caixa",
     "products": "Produtos",
     "stock": "Estoque",
@@ -43,13 +43,17 @@ ENDPOINT_TAB_MAP = {
     "pdv": "pdv",
     "mesa": "mesa",
     "mesa_update_total": "mesa",
+    "mesa_delete": "mesa",
+    "mesa_close": "mesa",
     "cash": "cash",
     "products": "products",
     "product_update": "products",
+    "product_duplicate": "products",
     "stock": "stock",
     "stock_entry": "stock",
     "stock_adjust": "stock",
     "inventory": "inventory",
+    "inventory_export": "inventory",
     "inventory_apply": "inventory",
     "reports": "reports",
     "monthly_management": "monthly",
@@ -93,6 +97,7 @@ def init_db() -> None:
 
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE,
             name TEXT NOT NULL,
             category TEXT NOT NULL,
             cost_price REAL NOT NULL,
@@ -123,6 +128,7 @@ def init_db() -> None:
             status TEXT NOT NULL DEFAULT 'ACTIVE',
             cancellation_reason TEXT,
             cash_session_id INTEGER,
+            performed_by TEXT,
             FOREIGN KEY(cash_session_id) REFERENCES cash_sessions(id)
         );
 
@@ -145,6 +151,7 @@ def init_db() -> None:
             quantity INTEGER NOT NULL,
             note TEXT,
             created_at TEXT NOT NULL,
+            performed_by TEXT,
             FOREIGN KEY(product_id) REFERENCES products(id)
         );
 
@@ -182,6 +189,18 @@ def init_db() -> None:
         db.execute("ALTER TABLE users ADD COLUMN expires_at TEXT")
     if "allowed_tabs" not in user_columns:
         db.execute("ALTER TABLE users ADD COLUMN allowed_tabs TEXT")
+
+    product_columns = {row[1] for row in db.execute("PRAGMA table_info(products)").fetchall()}
+    if "code" not in product_columns:
+        db.execute("ALTER TABLE products ADD COLUMN code TEXT")
+
+    sale_columns = {row[1] for row in db.execute("PRAGMA table_info(sales)").fetchall()}
+    if "performed_by" not in sale_columns:
+        db.execute("ALTER TABLE sales ADD COLUMN performed_by TEXT")
+
+    movement_columns = {row[1] for row in db.execute("PRAGMA table_info(stock_movements)").fetchall()}
+    if "performed_by" not in movement_columns:
+        db.execute("ALTER TABLE stock_movements ADD COLUMN performed_by TEXT")
 
     admin_username = os.getenv("ADMIN_USERNAME", "Marola")
     admin_password = os.getenv("ADMIN_PASSWORD")
@@ -241,6 +260,9 @@ def init_db() -> None:
         app.config["LOGO_PATH"] = logo_row[0]
     app.config["UPLOAD_FOLDER"].mkdir(parents=True, exist_ok=True)
     app.config["BACKUP_FOLDER"].mkdir(parents=True, exist_ok=True)
+    products_without_code = db.execute("SELECT id FROM products WHERE code IS NULL OR code = ''").fetchall()
+    for row in products_without_code:
+        ensure_product_code(db, int(row[0]))
     db.commit()
     db.close()
 
@@ -422,6 +444,20 @@ def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def normalize_upper(value: str) -> str:
+    return " ".join((value or "").strip().upper().split())
+
+
+def actor_username() -> str:
+    return str(session.get("username") or "SISTEMA")
+
+
+def ensure_product_code(db: sqlite3.Connection, product_id: int) -> str:
+    code = f"PRD-{product_id:05d}"
+    db.execute("UPDATE products SET code = ? WHERE id = ? AND (code IS NULL OR code = '')", (code, product_id))
+    return code
+
+
 STATUS_LABELS = {
     "ACTIVE": "ATIVA",
     "CANCELLED": "CANCELADA",
@@ -513,10 +549,10 @@ def inject_branding() -> dict[str, str]:
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"]
+        username = normalize_upper(request.form["username"])
         password = request.form["password"]
         db = get_db()
-        user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        user = db.execute("SELECT * FROM users WHERE UPPER(username) = ?", (username,)).fetchone()
         if user and verify_password(user["password"], password):
             if is_user_blocked(user):
                 flash("Acesso bloqueado ou expirado. Contate o administrador.", "danger")
@@ -563,7 +599,7 @@ def admin_users():
     db = get_db()
 
     if request.method == "POST":
-        username = request.form["username"].strip()
+        username = normalize_upper(request.form["username"])
         password = request.form["password"].strip()
         duration_days = int(request.form.get("duration_days", "30"))
 
@@ -779,20 +815,21 @@ def products():
     db = get_db()
 
     if request.method == "POST":
-        db.execute(
+        cur = db.execute(
             """
             INSERT INTO products (name, category, cost_price, sale_price, stock_qty, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
-                request.form["name"],
-                request.form["category"],
+                normalize_upper(request.form["name"]),
+                normalize_upper(request.form["category"]),
                 float(request.form["cost_price"]),
                 float(request.form["sale_price"]),
                 int(request.form["stock_qty"]),
                 now_iso(),
             ),
         )
+        ensure_product_code(db, int(cur.lastrowid))
         db.commit()
         flash("Produto cadastrado com sucesso.", "success")
         return redirect(url_for("products"))
@@ -814,8 +851,8 @@ def product_update(product_id: int):
         WHERE id = ?
         """,
         (
-            request.form["name"],
-            request.form["category"],
+            normalize_upper(request.form["name"]),
+            normalize_upper(request.form["category"]),
             float(request.form["cost_price"]),
             float(request.form["sale_price"]),
             int(request.form["stock_qty"]),
@@ -829,7 +866,7 @@ def product_update(product_id: int):
 
 @app.post("/products/<int:product_id>/delete")
 def product_delete(product_id: int):
-    redirect_resp = require_admin()
+    redirect_resp = require_login()
     if redirect_resp:
         return redirect_resp
     db = get_db()
@@ -844,6 +881,36 @@ def product_delete(product_id: int):
     return redirect(url_for("products"))
 
 
+@app.post("/products/<int:product_id>/duplicate")
+def product_duplicate(product_id: int):
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    source = db.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
+    if not source:
+        flash("Produto não encontrado para duplicação.", "warning")
+        return redirect(url_for("products"))
+    cur = db.execute(
+        """
+        INSERT INTO products (name, category, cost_price, sale_price, stock_qty, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            f"{source['name']} - COPIA",
+            source["category"],
+            source["cost_price"],
+            source["sale_price"],
+            int(source["stock_qty"]),
+            now_iso(),
+        ),
+    )
+    ensure_product_code(db, int(cur.lastrowid))
+    db.commit()
+    flash("Produto duplicado com sucesso.", "success")
+    return redirect(url_for("products"))
+
+
 @app.post("/stock/entry")
 def stock_entry():
     redirect_resp = require_login()
@@ -852,11 +919,11 @@ def stock_entry():
     db = get_db()
     pid = int(request.form["product_id"])
     qty = int(request.form["quantity"])
-    note = request.form.get("note", "Entrada de mercadoria")
+    note = normalize_upper(request.form.get("note", "Entrada de mercadoria"))
     db.execute("UPDATE products SET stock_qty = stock_qty + ? WHERE id = ?", (qty, pid))
     db.execute(
-        "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at) VALUES (?, 'ENTRY', ?, ?, ?)",
-        (pid, qty, note, now_iso()),
+        "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at, performed_by) VALUES (?, 'ENTRY', ?, ?, ?, ?)",
+        (pid, qty, note, now_iso(), actor_username()),
     )
     db.commit()
     flash("Entrada de estoque registrada.", "success")
@@ -871,13 +938,13 @@ def stock_adjust():
     db = get_db()
     pid = int(request.form["product_id"])
     qty = int(request.form["quantity"])
-    note = request.form.get("note", "Ajuste manual")
+    note = normalize_upper(request.form.get("note", "Ajuste manual"))
 
     db.execute("UPDATE products SET stock_qty = stock_qty + ? WHERE id = ?", (qty, pid))
 
     db.execute(
-        "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at) VALUES (?, 'ADJUST', ?, ?, ?)",
-        (pid, qty, note, now_iso()),
+        "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at, performed_by) VALUES (?, 'ADJUST', ?, ?, ?, ?)",
+        (pid, qty, note, now_iso(), actor_username()),
     )
     db.commit()
     flash("Ajuste de estoque registrado.", "success")
@@ -911,6 +978,26 @@ def inventory():
     return render_template("inventory.html", products=products)
 
 
+@app.get("/inventory/export")
+def inventory_export():
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    rows = db.execute("SELECT code, name, category, stock_qty FROM products ORDER BY name").fetchall()
+    out = io.StringIO()
+    writer = csv.writer(out, delimiter=";")
+    writer.writerow(["CODIGO", "PRODUTO", "CATEGORIA", "ESTOQUE_ATUAL"])
+    for r in rows:
+        writer.writerow([r["code"] or "", r["name"], r["category"], r["stock_qty"]])
+    data = out.getvalue().encode("utf-8-sig")
+    return Response(
+        data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=inventario_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"},
+    )
+
+
 @app.post("/inventory/apply")
 def inventory_apply():
     redirect_resp = require_login()
@@ -932,8 +1019,8 @@ def inventory_apply():
             continue
         db.execute("UPDATE products SET stock_qty = ? WHERE id = ?", (counted, pid))
         db.execute(
-            "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at) VALUES (?, 'ADJUST', ?, ?, ?)",
-            (pid, diff, "Ajuste por inventário", now_iso()),
+            "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at, performed_by) VALUES (?, 'ADJUST', ?, ?, ?, ?)",
+            (pid, diff, "AJUSTE POR INVENTARIO", now_iso(), actor_username()),
         )
         updates += 1
 
@@ -993,10 +1080,10 @@ def pdv():
         total = max(subtotal - discount, 0)
         cur = db.execute(
             """
-            INSERT INTO sales (created_at, subtotal, discount, total, payment_method, cash_session_id)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO sales (created_at, subtotal, discount, total, payment_method, cash_session_id, performed_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (now_iso(), subtotal, discount, total, payment_method, session_row["id"]),
+            (now_iso(), subtotal, discount, total, payment_method, session_row["id"], actor_username()),
         )
         sale_id = cur.lastrowid
 
@@ -1013,8 +1100,8 @@ def pdv():
                 (qty, product["id"]),
             )
             db.execute(
-                "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at) VALUES (?, 'SALE', ?, ?, ?)",
-                (product["id"], -qty, f"Venda #{sale_id}", now_iso()),
+                "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at, performed_by) VALUES (?, 'SALE', ?, ?, ?, ?)",
+                (product["id"], -qty, f"VENDA #{sale_id}", now_iso(), actor_username()),
             )
 
         db.execute(
@@ -1042,7 +1129,7 @@ def cancel_sale(sale_id: int):
     redirect_resp = require_login()
     if redirect_resp:
         return redirect_resp
-    reason = request.form.get("reason", "Cancelamento manual")
+    reason = normalize_upper(request.form.get("reason", "Cancelamento manual"))
     db = get_db()
     sale = db.execute("SELECT * FROM sales WHERE id = ?", (sale_id,)).fetchone()
     if not sale or sale["status"] == "CANCELLED":
@@ -1056,8 +1143,8 @@ def cancel_sale(sale_id: int):
             (item["quantity"], item["product_id"]),
         )
         db.execute(
-            "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at) VALUES (?, 'CANCEL', ?, ?, ?)",
-            (item["product_id"], item["quantity"], f"Cancelamento venda #{sale_id}", now_iso()),
+            "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at, performed_by) VALUES (?, 'CANCEL', ?, ?, ?, ?)",
+            (item["product_id"], item["quantity"], f"CANCELAMENTO VENDA #{sale_id}", now_iso(), actor_username()),
         )
 
     db.execute(
@@ -1278,11 +1365,11 @@ def monthly_add_sale():
     created_at = f"{month_key}-01T12:00:00"
     total = float(request.form["total"])
     payment_method = request.form["payment_method"]
-    note = request.form.get("note", "Ajuste manual mês")
+    note = normalize_upper(request.form.get("note", "Ajuste manual mês"))
 
     db.execute(
-        "INSERT INTO sales (created_at, subtotal, discount, total, payment_method, status, cancellation_reason, cash_session_id) VALUES (?, ?, 0, ?, ?, 'ACTIVE', ?, NULL)",
-        (created_at, total, total, payment_method, note),
+        "INSERT INTO sales (created_at, subtotal, discount, total, payment_method, status, cancellation_reason, cash_session_id, performed_by) VALUES (?, ?, 0, ?, ?, 'ACTIVE', ?, NULL, ?)",
+        (created_at, total, total, payment_method, note, actor_username()),
     )
     db.commit()
     flash("Venda adicionada no mês selecionado.", "success")
@@ -1314,11 +1401,11 @@ def mesa():
     db = get_db()
 
     if request.method == "POST":
-        client_name = request.form["client_name"].strip()
+        client_name = normalize_upper(request.form["client_name"])
         product_id = int(request.form["product_id"])
         quantity = int(request.form["quantity"])
         discount = parse_money(request.form.get("discount", "0"))
-        note = request.form.get("note", "").strip()
+        note = normalize_upper(request.form.get("note", ""))
 
         if not client_name:
             flash("Informe o nome do cliente.", "warning")
@@ -1350,8 +1437,8 @@ def mesa():
         )
         db.execute("UPDATE products SET stock_qty = stock_qty - ? WHERE id = ?", (quantity, product_id))
         db.execute(
-            "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at) VALUES (?, 'SALE', ?, ?, ?)",
-            (product_id, -quantity, f"Fiado - {client_name}", now_iso()),
+            "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at, performed_by) VALUES (?, 'SALE', ?, ?, ?, ?)",
+            (product_id, -quantity, f"FIADO - {client_name}", now_iso(), actor_username()),
         )
         db.commit()
         flash("Cliente adicionado na lista de fiados e estoque atualizado.", "success")
@@ -1364,18 +1451,66 @@ def mesa():
 
 @app.post("/mesa/<int:tab_id>/delete")
 def mesa_delete(tab_id: int):
-    redirect_resp = require_admin()
+    redirect_resp = require_login()
     if redirect_resp:
         return redirect_resp
     db = get_db()
-    row = db.execute("SELECT id FROM open_tabs WHERE id = ?", (tab_id,)).fetchone()
+    row = db.execute("SELECT * FROM open_tabs WHERE id = ?", (tab_id,)).fetchone()
     if not row:
         flash("Registro de fiado não encontrado.", "warning")
         return redirect(url_for("mesa"))
+    db.execute(
+        "UPDATE products SET stock_qty = stock_qty + ? WHERE id = ?",
+        (int(row["quantity"]), int(row["product_id"])),
+    )
     db.execute("DELETE FROM open_tabs WHERE id = ?", (tab_id,))
     db.commit()
-    flash("Cliente removido da lista de fiados.", "warning")
+    flash("Fiado cancelado e estoque devolvido.", "warning")
     return redirect(url_for("mesa"))
+
+
+@app.post("/mesa/<int:tab_id>/close")
+def mesa_close(tab_id: int):
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    row = db.execute("SELECT * FROM open_tabs WHERE id = ?", (tab_id,)).fetchone()
+    if not row:
+        flash("Registro de fiado não encontrado.", "warning")
+        return redirect(url_for("mesa"))
+
+    subtotal = float(row["quantity"]) * float(row["unit_price"])
+    discount = float(row["discount"])
+    total = max(float(row["total_debt"]), 0)
+
+    cur = db.execute(
+        """
+        INSERT INTO sales (created_at, subtotal, discount, total, payment_method, status, cancellation_reason, cash_session_id, performed_by)
+        VALUES (?, ?, ?, ?, 'DINHEIRO', 'ACTIVE', ?, NULL, ?)
+        """,
+        (now_iso(), subtotal, discount, total, f"FIADO FECHADO - {row['client_name']}", actor_username()),
+    )
+    sale_id = int(cur.lastrowid)
+
+    db.execute(
+        """
+        INSERT INTO sale_items (sale_id, product_id, product_name, quantity, unit_price, total_price)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            sale_id,
+            int(row["product_id"]),
+            row["product_name"],
+            int(row["quantity"]),
+            float(row["unit_price"]),
+            float(row["quantity"]) * float(row["unit_price"]),
+        ),
+    )
+    db.execute("DELETE FROM open_tabs WHERE id = ?", (tab_id,))
+    db.commit()
+    flash(f"Fiado fechado com sucesso na venda #{sale_id}.", "success")
+    return redirect(url_for("sale_receipt", sale_id=sale_id))
 
 
 @app.post("/mesa/<int:tab_id>/update-total")
