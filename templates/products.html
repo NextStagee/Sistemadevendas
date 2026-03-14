@@ -26,10 +26,12 @@
 
 <section class="card">
   <h3>Gerenciar produtos</h3>
+  <label for="products-filter">Filtro dos produtos</label>
+  <input id="products-filter" type="search" placeholder="Filtrar por código, nome ou categoria..." autocomplete="off">
   <table>
     <tr><th>Código</th><th>Nome</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Estoque</th><th>Ações</th></tr>
     {% for p in products %}
-      <tr>
+      <tr class="products-row" data-filter="{{ (p['code'] or '') ~ ' ' ~ p['name'] ~ ' ' ~ p['category'] }}">
         <form method="post" action="{{ url_for('product_update', product_id=p['id']) }}">
           <td><strong>{{ p['code'] or '-' }}</strong></td>
           <td><input name="name" value="{{ p['name'] }}" required></td>
@@ -54,4 +56,17 @@
     {% endfor %}
   </table>
 </section>
+
+<script>
+  const productsFilterInput = document.getElementById('products-filter');
+  const productsRows = document.querySelectorAll('.products-row');
+
+  productsFilterInput?.addEventListener('input', () => {
+    const term = productsFilterInput.value.trim().toLowerCase();
+    productsRows.forEach((row) => {
+      const text = (row.dataset.filter || '').toLowerCase();
+      row.style.display = text.includes(term) ? '' : 'none';
+    });
+  });
+</script>
 {% endblock %}

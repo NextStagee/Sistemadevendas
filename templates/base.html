@@ -78,6 +78,17 @@
     {% block content %}{% endblock %}
   </main>
 
+  <button id="floating-calc-toggle" class="floating-calc-toggle" type="button" aria-label="Abrir calculadora" title="Calculadora">🧮</button>
+  <section id="floating-calc-panel" class="floating-calc-panel" aria-hidden="true">
+    <h3>Calculadora</h3>
+    <div class="inline">
+      <input id="floating-calc-expression" type="text" placeholder="Ex: (10+5)*2" autocomplete="off">
+      <button type="button" id="floating-calc-eval-btn">Calcular</button>
+    </div>
+    <p id="floating-calc-result" class="inventory-diff-zero" style="margin-top:8px;">RESULTADO: 0</p>
+  </section>
+
+
   <script>
     const body = document.body;
     const menu = document.getElementById('side-menu');
@@ -107,6 +118,45 @@
       field.addEventListener('input', () => {
         field.value = field.value.toUpperCase();
       });
+    });
+
+    const floatingCalcToggle = document.getElementById('floating-calc-toggle');
+    const floatingCalcPanel = document.getElementById('floating-calc-panel');
+    const floatingCalcInput = document.getElementById('floating-calc-expression');
+    const floatingCalcButton = document.getElementById('floating-calc-eval-btn');
+    const floatingCalcResult = document.getElementById('floating-calc-result');
+
+    const evalFloatingCalc = () => {
+      const exp = (floatingCalcInput?.value || '').trim();
+      if (!exp) {
+        floatingCalcResult.textContent = 'RESULTADO: 0';
+        return;
+      }
+      const safe = /^[0-9+\-*/().\s,]+$/.test(exp);
+      if (!safe) {
+        floatingCalcResult.textContent = 'RESULTADO: EXPRESSÃO INVÁLIDA';
+        return;
+      }
+      try {
+        const normalized = exp.replace(',', '.');
+        const value = Function(`"use strict"; return (${normalized})`)();
+        floatingCalcResult.textContent = `RESULTADO: ${Number(value).toFixed(2)}`;
+      } catch {
+        floatingCalcResult.textContent = 'RESULTADO: ERRO AO CALCULAR';
+      }
+    };
+
+    floatingCalcToggle?.addEventListener('click', () => {
+      const isOpen = floatingCalcPanel.classList.toggle('open');
+      floatingCalcPanel.setAttribute('aria-hidden', String(!isOpen));
+    });
+
+    floatingCalcButton?.addEventListener('click', evalFloatingCalc);
+    floatingCalcInput?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        evalFloatingCalc();
+      }
     });
 
   </script>
