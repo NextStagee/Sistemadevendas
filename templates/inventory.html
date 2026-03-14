@@ -9,10 +9,10 @@
   <form method="post" action="{{ url_for('inventory_apply') }}">
     <div class="inventory-list-window">
       <table>
-        <tr><th>Código (ID)</th><th>Produto</th><th>Estoque atual</th><th>Contagem física</th><th>Diferença</th></tr>
+        <tr><th>Código</th><th>Produto</th><th>Estoque atual</th><th>Contagem física</th><th>Diferença</th></tr>
         {% for p in products %}
         <tr class="inventory-row" data-stock-qty="{{ p['stock_qty'] }}">
-          <td>{{ p['code'] or ('ID-' ~ p['id']) }}</td>
+          <td>{{ p['code'] or '-' }}</td>
           <td>{{ p['name'] }}</td>
           <td class="inventory-stock-qty">{{ p['stock_qty'] }}</td>
           <td>

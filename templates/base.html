@@ -64,7 +64,7 @@
   {% endif %}
 
   <main class="app-main {% if session.get('user_id') %}with-sidebar{% endif %}">
-    {% if session.get('user_id') and request.endpoint in ['products', 'stock', 'inventory'] %}
+    {% if session.get('user_id') %}
     <section class="card">
       <label for="global-table-filter">Filtro geral (tabelas da tela)</label>
       <input id="global-table-filter" type="search" placeholder="Filtrar por qualquer texto..." autocomplete="off">
