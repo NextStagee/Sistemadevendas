@@ -1,49 +1,86 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card">
-  <h2>Admin • Configurações do Sistema</h2>
-  <form method="post" action="{{ url_for('admin_settings') }}" enctype="multipart/form-data" class="grid-form">
-    <label>Nome do sistema (menu)
-      <input name="system_name" value="{{ system_name }}" required>
-    </label>
-    <label>Logo do sistema
-      <input type="file" name="logo_file" accept=".png,.jpg,.jpeg,.webp,.svg">
-    </label>
-    <button type="submit">Alterar</button>
-  </form>
-  <small>O título da página permanece fixo como "Sistema de Vendas".</small>
+<section class="card admin-hero">
+  <h2>Admin • Central de Controle</h2>
+  <p>Gerencie empresas (módulos), aparência do sistema, backups e usuários em um só lugar.</p>
 </section>
 
-<section class="card">
-  <h2>Admin • Backup Diário</h2>
-  <p>Backup automático ativo: <strong>1 vez por dia</strong>. Retenção atual: {{ backup_keep_days }} dias.</p>
-  <p>Último backup automático: <strong>{{ backup_last_run }}</strong></p>
-  <form method="post" action="{{ url_for('admin_run_backup') }}">
-    <button type="submit">Gerar backup agora</button>
-  </form>
+<div class="admin-grid">
+  <section class="card admin-card">
+    <h3>Empresas / Módulos PDV</h3>
+    <p>Use o seletor no menu lateral para alternar entre empresa 1 (PDV1), empresa 2 (PDV2) e novos módulos.</p>
+    <form method="post" action="{{ url_for('admin_create_module') }}" class="grid-form">
+      <label>Nome da empresa
+        <input name="module_name" placeholder="EX: EMPRESA 3" required>
+      </label>
+      <label>Nome do PDV
+        <input name="pdv_label" placeholder="EX: PDV 3" required>
+      </label>
+      <button type="submit">Criar módulo</button>
+    </form>
 
-  <h3>Arquivos de backup</h3>
-  <table>
-    <thead>
-      <tr><th>Arquivo</th><th>Data</th><th>Tamanho</th><th>Ação</th></tr>
-    </thead>
-    <tbody>
-      {% for b in backups %}
-      <tr>
-        <td>{{ b['name'] }}</td>
-        <td>{{ b['created_at'] }}</td>
-        <td>{{ b['size_kb'] }} KB</td>
-        <td><a href="{{ url_for('admin_download_backup', backup_name=b['name']) }}">Baixar</a></td>
-      </tr>
-      {% else %}
-      <tr><td colspan="4">Nenhum backup gerado ainda.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+    <table>
+      <thead>
+        <tr><th>Código</th><th>Empresa</th><th>PDV</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for module in modules %}
+        <tr>
+          <td>{{ module['code'] }}</td>
+          <td>{{ module['name'] }}</td>
+          <td>{{ module['pdv_label'] }}</td>
+          <td>{% if module['is_active'] %}Ativo{% else %}Inativo{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
 
-<section class="card">
-  <h2>Admin • Usuários</h2>
+  <section class="card admin-card">
+    <h3>Visual do sistema</h3>
+    <form method="post" action="{{ url_for('admin_settings') }}" enctype="multipart/form-data" class="grid-form">
+      <label>Nome do sistema (menu)
+        <input name="system_name" value="{{ system_name }}" required>
+      </label>
+      <label>Logo do sistema
+        <input type="file" name="logo_file" accept=".png,.jpg,.jpeg,.webp,.svg">
+      </label>
+      <button type="submit">Aplicar alterações</button>
+    </form>
+    <small>O título da página permanece fixo como "Sistema de Vendas".</small>
+  </section>
+
+  <section class="card admin-card">
+    <h3>Backup diário</h3>
+    <p>Backup automático ativo: <strong>1 vez por dia</strong>. Retenção atual: {{ backup_keep_days }} dias.</p>
+    <p>Último backup automático: <strong>{{ backup_last_run }}</strong></p>
+    <form method="post" action="{{ url_for('admin_run_backup') }}">
+      <button type="submit">Gerar backup agora</button>
+    </form>
+
+    <h4>Arquivos de backup</h4>
+    <table>
+      <thead>
+        <tr><th>Arquivo</th><th>Data</th><th>Tamanho</th><th>Ação</th></tr>
+      </thead>
+      <tbody>
+        {% for b in backups %}
+        <tr>
+          <td>{{ b['name'] }}</td>
+          <td>{{ b['created_at'] }}</td>
+          <td>{{ b['size_kb'] }} KB</td>
+          <td><a href="{{ url_for('admin_download_backup', backup_name=b['name']) }}">Baixar</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">Nenhum backup gerado ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<section class="card admin-card">
+  <h3>Usuários</h3>
   <p>Cadastre clientes com validade de acesso de 30, 60 ou 90 dias.</p>
 
   <form method="post" class="grid-form">
@@ -64,7 +101,7 @@
   </form>
 </section>
 
-<section class="card">
+<section class="card admin-card">
   <h3>Usuários cadastrados</h3>
   <table>
     <thead>

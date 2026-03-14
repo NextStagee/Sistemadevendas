@@ -50,6 +50,18 @@
       {% if is_admin %}
       <a href="{{ url_for('admin_users') }}" title="Admin"><span>🔐</span><small>Admin</small></a>
       {% endif %}
+      {% if modules %}
+      <form method="post" action="{{ url_for('select_module') }}" class="module-switcher">
+        <label for="module_id">Empresa / Módulo</label>
+        <select id="module_id" name="module_id" onchange="this.form.submit()">
+          {% for module in modules %}
+          <option value="{{ module['id'] }}" {% if current_module and current_module['id'] == module['id'] %}selected{% endif %}>
+            {{ module['name'] }} • {{ module['pdv_label'] }}
+          </option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
       <a href="{{ url_for('logout') }}" title="Sair"><span>🚪</span><small>Sair</small></a>
     </nav>
 

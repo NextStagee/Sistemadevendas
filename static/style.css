@@ -450,3 +450,46 @@ a { color: var(--link); }
     width: auto;
   }
 }
+
+.module-switcher {
+  width: 170px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.module-switcher label {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.module-switcher select {
+  width: 100%;
+  margin: 0;
+  padding: 8px;
+  font-size: 0.8rem;
+}
+
+.admin-hero {
+  background: linear-gradient(135deg, #fff8f1, #fff);
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-card h3,
+.admin-card h4 {
+  margin-top: 0;
+}
+
+@media (max-width: 1100px) {
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+}
