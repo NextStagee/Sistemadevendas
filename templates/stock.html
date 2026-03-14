@@ -25,8 +25,8 @@
 <ul>{% for p in products %}<li class="{{ 'low' if p['stock_qty'] <= low_threshold else '' }}">{{ p['name'] }}: {{ p['stock_qty'] }}</li>{% endfor %}</ul>
 </section>
 <section class="card"><h3>Histórico de movimentações</h3>
-<table><tr><th>Data</th><th>Produto</th><th>Tipo</th><th>Qtd</th><th>Obs</th></tr>
-{% for m in movements %}<tr><td>{{ m['created_at']|fmt_dt }}</td><td>{{ m['product_name'] }}</td><td>{{ m['movement_type']|label_movement }}</td><td>{{ m['quantity'] }}</td><td>{{ m['note'] }}</td></tr>{% endfor %}
+<table><tr><th>Data</th><th>Produto</th><th>Tipo</th><th>Qtd</th><th>Obs</th><th>Usuário</th></tr>
+{% for m in movements %}<tr><td>{{ m['created_at']|fmt_dt }}</td><td>{{ m['product_name'] }}</td><td>{{ m['movement_type']|label_movement }}</td><td>{{ m['quantity'] }}</td><td>{{ m['note'] }}</td><td>{{ m['performed_by'] or '-' }}</td></tr>{% endfor %}
 </table>
 </section>
 {% endblock %}

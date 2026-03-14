@@ -64,6 +64,12 @@
   {% endif %}
 
   <main class="app-main {% if session.get('user_id') %}with-sidebar{% endif %}">
+    {% if session.get('user_id') %}
+    <section class="card">
+      <label for="global-table-filter">Filtro geral (tabelas da tela)</label>
+      <input id="global-table-filter" type="search" placeholder="Filtrar por qualquer texto..." autocomplete="off">
+    </section>
+    {% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}
         <div class="flash {{ category }}">{{ message }}</div>
@@ -83,6 +89,25 @@
         body.classList.toggle('menu-collapsed');
       });
     }
+
+    const globalTableFilter = document.getElementById('global-table-filter');
+    globalTableFilter?.addEventListener('input', () => {
+      const term = globalTableFilter.value.trim().toLowerCase();
+      document.querySelectorAll('table').forEach((table) => {
+        const rows = table.querySelectorAll('tr');
+        rows.forEach((row, index) => {
+          if (index === 0) return;
+          const text = (row.textContent || '').toLowerCase();
+          row.style.display = text.includes(term) ? '' : 'none';
+        });
+      });
+    });
+
+    document.querySelectorAll('input[type="text"], input[type="search"], textarea').forEach((field) => {
+      field.addEventListener('input', () => {
+        field.value = field.value.toUpperCase();
+      });
+    });
 
   </script>
 </body>

@@ -3,6 +3,9 @@
 <section class="card">
   <h2>Inventário • Batida de Estoque</h2>
   <p>Informe a contagem física para cada produto e clique em aplicar. O sistema ajustará o estoque automaticamente.</p>
+  <div class="inline" style="margin-bottom:10px;">
+    <a class="action-link action-export" href="{{ url_for('inventory_export') }}">Exportar Excel (CSV)</a>
+  </div>
   <form method="post" action="{{ url_for('inventory_apply') }}">
     <label for="inventory-search">Pesquisar item no inventário</label>
     <input
@@ -14,9 +17,10 @@
 
     <div class="inventory-list-window">
       <table>
-        <tr><th>Produto</th><th>Estoque atual</th><th>Contagem física</th><th>Diferença</th></tr>
+        <tr><th>Código</th><th>Produto</th><th>Estoque atual</th><th>Contagem física</th><th>Diferença</th></tr>
         {% for p in products %}
         <tr class="inventory-row" data-product-name="{{ p['name']|lower }}" data-stock-qty="{{ p['stock_qty'] }}">
+          <td>{{ p['code'] or '-' }}</td>
           <td>{{ p['name'] }}</td>
           <td class="inventory-stock-qty">{{ p['stock_qty'] }}</td>
           <td>
@@ -30,6 +34,15 @@
     </div>
     <button type="submit" onclick="return confirm('Aplicar contagem do inventário?');">Aplicar inventário</button>
   </form>
+</section>
+
+<section class="card small">
+  <h3>Calculadora</h3>
+  <div class="inline">
+    <input id="calc-expression" type="text" placeholder="EX: (10+5)*2" autocomplete="off">
+    <button type="button" id="calc-eval-btn">Calcular</button>
+  </div>
+  <p id="calc-result" class="inventory-diff-zero" style="margin-top:8px;">RESULTADO: 0</p>
 </section>
 
 <script>
@@ -73,6 +86,38 @@
     const countedInput = row.querySelector('.inventory-counted-input');
     countedInput?.addEventListener('input', () => updateInventoryDifference(row));
     updateInventoryDifference(row);
+  });
+
+  const calcInput = document.getElementById('calc-expression');
+  const calcResult = document.getElementById('calc-result');
+  const calcButton = document.getElementById('calc-eval-btn');
+
+  const runCalculator = () => {
+    const exp = (calcInput?.value || '').trim();
+    if (!exp) {
+      calcResult.textContent = 'RESULTADO: 0';
+      return;
+    }
+    const safe = /^[0-9+\-*/().\s,]+$/.test(exp);
+    if (!safe) {
+      calcResult.textContent = 'RESULTADO: EXPRESSÃO INVÁLIDA';
+      return;
+    }
+    try {
+      const normalized = exp.replace(',', '.');
+      const value = Function(`"use strict"; return (${normalized})`)();
+      calcResult.textContent = `RESULTADO: ${Number(value).toFixed(2)}`;
+    } catch {
+      calcResult.textContent = 'RESULTADO: ERRO AO CALCULAR';
+    }
+  };
+
+  calcButton?.addEventListener('click', runCalculator);
+  calcInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      runCalculator();
+    }
   });
 </script>
 {% endblock %}

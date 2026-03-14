@@ -2,10 +2,10 @@
 {% block content %}
 <section class="card">
   <h2>Histórico de Vendas</h2>
-  <table><tr><th>ID</th><th>Data</th><th>Total</th><th>Pagamento</th><th>Status</th><th>Ações</th></tr>
+  <table><tr><th>ID</th><th>Data</th><th>Total</th><th>Pagamento</th><th>Status</th><th>Usuário</th><th>Ações</th></tr>
     {% for s in sales %}
       <tr>
-        <td>#{{ s['id'] }}</td><td>{{ s['created_at']|fmt_dt }}</td><td>R$ {{ '%.2f'|format(s['total']) }}</td><td>{{ s['payment_method'] }}</td><td>{{ s['status']|label_status }}</td>
+        <td>#{{ s['id'] }}</td><td>{{ s['created_at']|fmt_dt }}</td><td>R$ {{ '%.2f'|format(s['total']) }}</td><td>{{ s['payment_method'] }}</td><td>{{ s['status']|label_status }}</td><td>{{ s['performed_by'] or '-' }}</td>
         <td>
           <a href="{{ url_for('sale_receipt', sale_id=s['id']) }}">Comprovante</a>
           {% if s['status'] == 'ACTIVE' %}
@@ -17,7 +17,7 @@
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="6">Nenhuma venda registrada ainda.</td></tr>
+      <tr><td colspan="7">Nenhuma venda registrada ainda.</td></tr>
     {% endfor %}
   </table>
 </section>
