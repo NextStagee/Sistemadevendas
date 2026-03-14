@@ -73,6 +73,7 @@
     </div>
     {% endif %}
   </aside>
+  <div id="menu-backdrop" class="menu-backdrop"></div>
   {% endif %}
 
   <main class="app-main {% if session.get('user_id') %}with-sidebar{% endif %}">
@@ -106,12 +107,38 @@
     const menu = document.getElementById('side-menu');
     const menuToggle = document.getElementById('menu-toggle');
 
+    const menuBackdrop = document.getElementById('menu-backdrop');
+
+    const syncMobileMenuState = () => {
+      const isMobile = window.matchMedia('(max-width: 900px)').matches;
+      if (!menu) return;
+      if (isMobile) {
+        const open = body.classList.contains('menu-open');
+        menu.classList.toggle('closed', !open);
+      } else {
+        body.classList.remove('menu-open');
+      }
+    };
+
     if (menuToggle && menu) {
       menuToggle.addEventListener('click', () => {
+        const isMobile = window.matchMedia('(max-width: 900px)').matches;
+        if (isMobile) {
+          body.classList.toggle('menu-open');
+          syncMobileMenuState();
+          return;
+        }
         menu.classList.toggle('closed');
         body.classList.toggle('menu-collapsed');
       });
+      window.addEventListener('resize', syncMobileMenuState);
+      syncMobileMenuState();
     }
+
+    menuBackdrop?.addEventListener('click', () => {
+      body.classList.remove('menu-open');
+      syncMobileMenuState();
+    });
 
     const globalTableFilter = document.getElementById('global-table-filter');
     globalTableFilter?.addEventListener('input', () => {
@@ -123,6 +150,13 @@
           const text = (row.textContent || '').toLowerCase();
           row.style.display = text.includes(term) ? '' : 'none';
         });
+      });
+    });
+
+    document.querySelectorAll('.menu-nav a').forEach((link) => {
+      link.addEventListener('click', () => {
+        body.classList.remove('menu-open');
+        syncMobileMenuState();
       });
     });
 
