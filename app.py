@@ -85,6 +85,7 @@ ENDPOINT_TAB_MAP = {
     "cash": "cash",
     "products": "products",
     "product_update": "products",
+    "products_update_all": "products",
     "product_duplicate": "products",
     "stock": "stock",
     "stock_entry": "stock",
@@ -1029,6 +1030,55 @@ def products():
 
     rows = db.execute("SELECT * FROM products ORDER BY name").fetchall()
     return render_template("products.html", products=rows)
+
+
+
+
+@app.post("/products/update-all")
+def products_update_all():
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+
+    db = get_db()
+    product_ids = request.form.getlist("product_id")
+    names = request.form.getlist("name")
+    categories = request.form.getlist("category")
+    cost_prices = request.form.getlist("cost_price")
+    sale_prices = request.form.getlist("sale_price")
+    stock_qtys = request.form.getlist("stock_qty")
+
+    total_items = len(product_ids)
+    if total_items == 0:
+        flash("Não há produtos para atualizar.", "warning")
+        return redirect(url_for("products"))
+
+    if not (
+        total_items == len(names) == len(categories) == len(cost_prices) == len(sale_prices) == len(stock_qtys)
+    ):
+        flash("Falha ao atualizar produtos: dados inconsistentes.", "danger")
+        return redirect(url_for("products"))
+
+    for idx, product_id in enumerate(product_ids):
+        db.execute(
+            """
+            UPDATE products
+            SET name = ?, category = ?, cost_price = ?, sale_price = ?, stock_qty = ?
+            WHERE id = ?
+            """,
+            (
+                normalize_upper(names[idx]),
+                normalize_upper(categories[idx]),
+                float(cost_prices[idx]),
+                float(sale_prices[idx]),
+                int(stock_qtys[idx]),
+                int(product_id),
+            ),
+        )
+
+    db.commit()
+    flash(f"{total_items} produto(s) atualizado(s) com sucesso.", "success")
+    return redirect(url_for("products"))
 
 
 @app.post("/products/<int:product_id>/update")
