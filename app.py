@@ -834,6 +834,29 @@ def admin_create_module():
     return redirect(url_for("admin_users"))
 
 
+@app.post("/admin/modules/<int:module_id>/update")
+def admin_update_module(module_id: int):
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+
+    module = db.execute("SELECT * FROM business_modules WHERE id = ?", (module_id,)).fetchone()
+    if not module:
+        flash("Módulo não encontrado.", "warning")
+        return redirect(url_for("admin_users"))
+
+    name = normalize_upper(request.form.get("module_name", ""))
+    if not name:
+        flash("Informe o nome da empresa.", "warning")
+        return redirect(url_for("admin_users"))
+
+    db.execute("UPDATE business_modules SET name = ? WHERE id = ?", (name, module_id))
+    db.commit()
+    flash(f"Nome da empresa do módulo {module['code']} atualizado com sucesso.", "success")
+    return redirect(url_for("admin_users"))
+
+
 @app.post("/admin/modules/<int:module_id>/delete")
 def admin_delete_module(module_id: int):
     redirect_resp = require_admin()

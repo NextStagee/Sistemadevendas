@@ -31,6 +31,10 @@
           <td>{{ module['pdv_label'] }}</td>
           <td>{% if module['is_active'] %}Ativo{% else %}Inativo{% endif %}</td>
           <td>
+            <form method="post" action="{{ url_for('admin_update_module', module_id=module['id']) }}" class="inline" style="margin-bottom:6px;">
+              <input name="module_name" value="{{ module['name'] }}" required aria-label="Nome da empresa {{ module['code'] }}">
+              <button type="submit">Salvar nome</button>
+            </form>
             {% if module['code'] == 'PDV1' %}
               <small>Módulo padrão</small>
             {% else %}
