@@ -14,7 +14,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 BASE_DIR = Path(__file__).parent
-DB_PATH = BASE_DIR / "pdv.db"
+MASTER_DB_PATH = BASE_DIR / "pdv.db"
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-change-me"
@@ -24,6 +24,44 @@ app.config["UPLOAD_FOLDER"] = BASE_DIR / "static" / "uploads"
 app.config["BACKUP_FOLDER"] = BASE_DIR / "backups"
 
 PAYMENT_METHODS = ["DINHEIRO", "PIX", "CARTAO_DEBITO", "CARTAO_CREDITO"]
+
+CORE_ENDPOINTS = {
+    "static",
+    "login",
+    "logout",
+    "select_module",
+    "admin_users",
+    "admin_create_module",
+    "admin_delete_module",
+    "admin_update_user",
+    "admin_update_user_tabs",
+    "admin_delete_user",
+    "admin_settings",
+    "admin_run_backup",
+    "admin_download_backup",
+    "reset_data",
+}
+
+
+def module_db_filename(module_code: str) -> str:
+    normalized = (module_code or "PDV1").strip().upper()
+    if normalized in {"", "PDV1"}:
+        return "pdv.db"
+    suffix = normalized.replace("PDV", "")
+    if suffix.isdigit():
+        return f"pdv{int(suffix)}.db"
+    return f"{normalized.lower()}.db"
+
+
+def resolve_db_path() -> Path:
+    endpoint = request.endpoint or ""
+    if endpoint in CORE_ENDPOINTS or endpoint.startswith("admin_"):
+        return MASTER_DB_PATH
+    selected = session.get("module_db")
+    if not selected:
+        return MASTER_DB_PATH
+    return BASE_DIR / str(selected)
+
 LOW_STOCK_THRESHOLD = 5
 TAB_LABELS = {
     "dashboard": "Início",
@@ -52,6 +90,7 @@ ENDPOINT_TAB_MAP = {
     "stock": "stock",
     "stock_entry": "stock",
     "stock_adjust": "stock",
+    "stock_save_all": "stock",
     "inventory": "inventory",
     "inventory_export": "inventory",
     "inventory_apply": "inventory",
@@ -65,24 +104,43 @@ ENDPOINT_TAB_MAP = {
 }
 
 
+
+
+def get_master_db() -> sqlite3.Connection:
+    if "master_db" not in g:
+        conn = sqlite3.connect(MASTER_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        g.master_db = conn
+    return g.master_db
+
 def get_db() -> sqlite3.Connection:
-    if "db" not in g:
-        conn = sqlite3.connect(DB_PATH)
+    db_path = resolve_db_path()
+    if "db" not in g or g.get("db_path") != str(db_path):
+        previous = g.pop("db", None)
+        if previous is not None:
+            previous.close()
+        conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         g.db = conn
+        g.db_path = str(db_path)
     return g.db
 
 
 @app.teardown_appcontext
 def close_db(_: Any) -> None:
     db = g.pop("db", None)
+    master_db = g.pop("master_db", None)
+    g.pop("db_path", None)
     if db is not None:
         db.close()
+    if master_db is not None:
+        master_db.close()
 
 
-def init_db() -> None:
-    db = sqlite3.connect(DB_PATH)
+def init_db(db_path: Path = MASTER_DB_PATH, seed_modules: bool = False) -> None:
+    db = sqlite3.connect(db_path)
     db.execute("PRAGMA foreign_keys = ON")
     db.executescript(
         """
@@ -180,6 +238,16 @@ def init_db() -> None:
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS business_modules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            pdv_label TEXT NOT NULL,
+            db_name TEXT NOT NULL DEFAULT 'pdv.db',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
+        );
         """
     )
     user_columns = {row[1] for row in db.execute("PRAGMA table_info(users)").fetchall()}
@@ -201,6 +269,10 @@ def init_db() -> None:
     movement_columns = {row[1] for row in db.execute("PRAGMA table_info(stock_movements)").fetchall()}
     if "performed_by" not in movement_columns:
         db.execute("ALTER TABLE stock_movements ADD COLUMN performed_by TEXT")
+
+    module_columns = {row[1] for row in db.execute("PRAGMA table_info(business_modules)").fetchall()}
+    if module_columns and "db_name" not in module_columns:
+        db.execute("ALTER TABLE business_modules ADD COLUMN db_name TEXT NOT NULL DEFAULT 'pdv.db'")
 
     admin_username = os.getenv("ADMIN_USERNAME", "Marola")
     admin_password = os.getenv("ADMIN_PASSWORD")
@@ -254,7 +326,20 @@ def init_db() -> None:
     )
     db.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('backup_enabled', '1')")
     db.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('backup_keep_days', '30')")
+    db.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('backup_interval_hours', '6')")
     db.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('backup_last_run_date', '')")
+    db.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('backup_last_run_at', '')")
+    if seed_modules:
+        db.execute(
+            "INSERT OR IGNORE INTO business_modules (code, name, pdv_label, db_name, is_active, created_at) VALUES ('PDV1', 'EMPRESA 1', 'PDV 1', 'pdv.db', 1, ?)",
+            (now_iso(),),
+        )
+        db.execute(
+            "INSERT OR IGNORE INTO business_modules (code, name, pdv_label, db_name, is_active, created_at) VALUES ('PDV2', 'EMPRESA 2', 'PDV 2', 'pdv2.db', 1, ?)",
+            (now_iso(),),
+        )
+        db.execute("UPDATE business_modules SET db_name = 'pdv.db' WHERE code = 'PDV1'")
+        db.execute("UPDATE business_modules SET db_name = 'pdv2.db' WHERE code = 'PDV2'")
     logo_row = db.execute("SELECT value FROM system_settings WHERE key = 'logo_path'").fetchone()
     if logo_row:
         app.config["LOGO_PATH"] = logo_row[0]
@@ -290,14 +375,17 @@ def create_backup_archive() -> Path:
     backup_path = app.config["BACKUP_FOLDER"] / backup_name
     db_snapshot_path = app.config["BACKUP_FOLDER"] / f"snapshot_{backup_time}.db"
 
-    source = sqlite3.connect(DB_PATH)
-    dest = sqlite3.connect(db_snapshot_path)
-    source.backup(dest)
-    dest.close()
-    source.close()
-
     with tarfile.open(backup_path, "w:gz") as tar:
+        source = sqlite3.connect(MASTER_DB_PATH)
+        dest = sqlite3.connect(db_snapshot_path)
+        source.backup(dest)
+        dest.close()
+        source.close()
         tar.add(db_snapshot_path, arcname="pdv.db")
+        for module_db in sorted(BASE_DIR.glob("pdv*.db")):
+            if module_db.resolve() == MASTER_DB_PATH.resolve():
+                continue
+            tar.add(module_db, arcname=module_db.name)
         if app.config["UPLOAD_FOLDER"].exists():
             tar.add(app.config["UPLOAD_FOLDER"], arcname="uploads")
 
@@ -313,19 +401,41 @@ def cleanup_old_backups(keep_days: int) -> None:
             backup.unlink(missing_ok=True)
 
 
-def maybe_run_daily_backup() -> None:
+def maybe_run_scheduled_backup() -> None:
     db = get_db()
     if get_setting(db, "backup_enabled", "1") != "1":
         return
-    today = datetime.now().strftime("%Y-%m-%d")
-    last_run = get_setting(db, "backup_last_run_date", "")
-    if last_run == today:
-        return
+    interval_hours = int(get_setting(db, "backup_interval_hours", "6") or "6")
+    if interval_hours < 1:
+        interval_hours = 6
+    last_run_raw = get_setting(db, "backup_last_run_at", "")
+    if last_run_raw:
+        try:
+            last_run = datetime.fromisoformat(last_run_raw)
+            if datetime.now() - last_run < timedelta(hours=interval_hours):
+                return
+        except ValueError:
+            pass
     keep_days = int(get_setting(db, "backup_keep_days", "30") or "30")
     create_backup_archive()
     cleanup_old_backups(keep_days)
-    set_setting(db, "backup_last_run_date", today)
+    set_setting(db, "backup_last_run_at", now_iso())
+    set_setting(db, "backup_last_run_date", datetime.now().strftime("%Y-%m-%d"))
     db.commit()
+
+
+def ensure_next_module_selected(deleted_module_id: int) -> None:
+    current_id = int(session.get("module_id") or 0)
+    if current_id != deleted_module_id:
+        return
+    db = get_master_db()
+    fallback = db.execute("SELECT id, db_name FROM business_modules WHERE is_active = 1 ORDER BY id ASC LIMIT 1").fetchone()
+    if fallback:
+        session["module_id"] = int(fallback["id"])
+        session["module_db"] = fallback["db_name"]
+    else:
+        session.pop("module_id", None)
+        session.pop("module_db", None)
 
 
 def is_password_hashed(password: str) -> bool:
@@ -354,6 +464,36 @@ def user_allowed_tabs(user: sqlite3.Row | None) -> set[str]:
     if user["role"] == "ADMIN":
         return set(DEFAULT_USER_TABS)
     return parse_allowed_tabs(user["allowed_tabs"])
+
+
+def get_modules(db: sqlite3.Connection, only_active: bool = True) -> list[sqlite3.Row]:
+    query = "SELECT * FROM business_modules"
+    params: tuple[Any, ...] = ()
+    if only_active:
+        query += " WHERE is_active = 1"
+    query += " ORDER BY id ASC"
+    return db.execute(query, params).fetchall()
+
+
+def get_current_module(db: sqlite3.Connection) -> sqlite3.Row | None:
+    modules = get_modules(db, only_active=True)
+    if not modules:
+        return None
+    module_id = int(session.get("module_id") or 0)
+    current = next((module for module in modules if int(module["id"]) == module_id), None)
+    if current:
+        session["module_db"] = current["db_name"]
+        module_path = BASE_DIR / current["db_name"]
+        if not module_path.exists():
+            init_db(module_path, seed_modules=False)
+        return current
+    fallback = modules[0]
+    session["module_id"] = int(fallback["id"])
+    session["module_db"] = fallback["db_name"]
+    module_path = BASE_DIR / fallback["db_name"]
+    if not module_path.exists():
+        init_db(module_path, seed_modules=False)
+    return fallback
 
 
 def require_tab_access(tab_key: str):
@@ -398,7 +538,7 @@ def require_login():
 
     if is_user_blocked(user):
         if user["role"] != "ADMIN":
-            db = get_db()
+            db = get_master_db()
             db.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user["id"],))
             db.commit()
         session.clear()
@@ -425,7 +565,7 @@ def get_current_user() -> sqlite3.Row | None:
     if not uid:
         g.current_user = None
         return None
-    g.current_user = get_db().execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+    g.current_user = get_master_db().execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
     return g.current_user
 
 
@@ -514,7 +654,7 @@ app.jinja_env.filters["label_movement"] = label_movement
 def run_daily_backup() -> None:
     if request.endpoint == "static":
         return
-    maybe_run_daily_backup()
+    maybe_run_scheduled_backup()
 
 
 @app.before_request
@@ -528,12 +668,26 @@ def enforce_tab_permissions():
     return require_tab_access(tab_key)
 
 
+@app.before_request
+def ensure_module_context():
+    if request.endpoint in {"static", "login", "logout"}:
+        return None
+    if "user_id" not in session:
+        return None
+    db = get_master_db()
+    if get_current_module(db) is None:
+        flash("Nenhum módulo ativo configurado. Cadastre um módulo na área ADMIN.", "warning")
+    return None
+
+
 @app.context_processor
 def inject_branding() -> dict[str, str]:
     current_user = get_current_user()
     is_admin = bool(current_user and current_user["role"] == "ADMIN")
     allowed_tabs = user_allowed_tabs(current_user)
-    db = get_db()
+    db = get_master_db()
+    active_modules = get_modules(db, only_active=True)
+    current_module = get_current_module(db) if current_user else None
     return {
         "logo_path": app.config["LOGO_PATH"],
         "favicon_path": app.config["FAVICON_PATH"],
@@ -543,6 +697,8 @@ def inject_branding() -> dict[str, str]:
         "current_user": current_user,
         "allowed_tabs": allowed_tabs,
         "tab_labels": TAB_LABELS,
+        "modules": active_modules,
+        "current_module": current_module,
     }
 
 
@@ -551,7 +707,7 @@ def login():
     if request.method == "POST":
         username = normalize_upper(request.form["username"])
         password = request.form["password"]
-        db = get_db()
+        db = get_master_db()
         user = db.execute("SELECT * FROM users WHERE UPPER(username) = ?", (username,)).fetchone()
         if user and verify_password(user["password"], password):
             if is_user_blocked(user):
@@ -560,6 +716,10 @@ def login():
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             session["role"] = user["role"]
+            module = get_current_module(db)
+            if module:
+                session["module_id"] = int(module["id"])
+                session["module_db"] = module["db_name"]
             return redirect(url_for("dashboard"))
         flash("Usuário ou senha inválidos.", "danger")
     return render_template("login.html")
@@ -569,6 +729,26 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.post("/modules/select")
+def select_module():
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_master_db()
+    selected_id = int(request.form.get("module_id", "0") or 0)
+    module = db.execute("SELECT * FROM business_modules WHERE id = ? AND is_active = 1", (selected_id,)).fetchone()
+    if module:
+        session["module_id"] = int(module["id"])
+        session["module_db"] = module["db_name"]
+        module_path = BASE_DIR / module["db_name"]
+        if not module_path.exists():
+            init_db(module_path, seed_modules=False)
+        flash(f"Módulo ativo: {module['name']} ({module['pdv_label']}).", "success")
+    else:
+        flash("Módulo selecionado é inválido ou está inativo.", "warning")
+    return redirect(request.referrer or url_for("dashboard"))
 
 
 
@@ -639,10 +819,82 @@ def admin_users():
         now=now_iso(),
         available_tabs=TAB_LABELS,
         backups=backup_rows,
-        backup_last_run=get_setting(db, "backup_last_run_date", "-"),
+        backup_last_run=get_setting(db, "backup_last_run_at", "-") or "-",
+        backup_interval_hours=get_setting(db, "backup_interval_hours", "6"),
         backup_keep_days=get_setting(db, "backup_keep_days", "30"),
+        modules=db.execute("SELECT * FROM business_modules ORDER BY id ASC").fetchall(),
     )
 
+
+
+
+@app.post("/admin/modules")
+def admin_create_module():
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+
+    name = normalize_upper(request.form.get("module_name", ""))
+    pdv_label = normalize_upper(request.form.get("pdv_label", ""))
+
+    if not name or not pdv_label:
+        flash("Informe nome da empresa e identificação do PDV.", "warning")
+        return redirect(url_for("admin_users"))
+
+    last_id = db.execute("SELECT COALESCE(MAX(id), 0) FROM business_modules").fetchone()[0]
+    next_number = int(last_id) + 1
+    code = f"PDV{next_number}"
+    db_name = module_db_filename(code)
+
+    new_db_path = BASE_DIR / db_name
+    if not new_db_path.exists():
+        init_db(new_db_path, seed_modules=False)
+
+    try:
+        db.execute(
+            "INSERT INTO business_modules (code, name, pdv_label, db_name, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)",
+            (code, name, pdv_label, db_name, now_iso()),
+        )
+        db.commit()
+        flash(f"Módulo {name} criado com sucesso ({pdv_label}).", "success")
+    except sqlite3.IntegrityError:
+        flash("Não foi possível criar o módulo. Tente novamente.", "danger")
+
+    return redirect(url_for("admin_users"))
+
+
+@app.post("/admin/modules/<int:module_id>/delete")
+def admin_delete_module(module_id: int):
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    module = db.execute("SELECT * FROM business_modules WHERE id = ?", (module_id,)).fetchone()
+    if not module:
+        flash("Módulo não encontrado.", "warning")
+        return redirect(url_for("admin_users"))
+
+    if str(module["db_name"]) == "pdv.db" or str(module["code"]).upper() == "PDV1":
+        flash("O módulo principal (PDV1) não pode ser removido.", "danger")
+        return redirect(url_for("admin_users"))
+
+    active_count = db.execute("SELECT COUNT(*) FROM business_modules WHERE is_active = 1").fetchone()[0]
+    if int(module["is_active"]) == 1 and int(active_count) <= 1:
+        flash("Deve existir ao menos um módulo ativo.", "danger")
+        return redirect(url_for("admin_users"))
+
+    db.execute("DELETE FROM business_modules WHERE id = ?", (module_id,))
+    db.commit()
+
+    ensure_next_module_selected(module_id)
+
+    module_db_path = (BASE_DIR / str(module["db_name"]))
+    if module_db_path.exists() and module_db_path.name != "pdv.db":
+        module_db_path.unlink(missing_ok=True)
+
+    flash(f"Módulo {module['name']} removido com sucesso.", "warning")
+    return redirect(url_for("admin_users"))
 
 @app.post("/admin/users/<int:user_id>/update")
 def admin_update_user(user_id: int):
@@ -766,6 +1018,7 @@ def admin_run_backup():
     keep_days = int(get_setting(db, "backup_keep_days", "30") or "30")
     create_backup_archive()
     cleanup_old_backups(keep_days)
+    set_setting(db, "backup_last_run_at", now_iso())
     set_setting(db, "backup_last_run_date", datetime.now().strftime("%Y-%m-%d"))
     db.commit()
     flash("Backup gerado com sucesso.", "success")
@@ -948,6 +1201,46 @@ def stock_adjust():
     )
     db.commit()
     flash("Ajuste de estoque registrado.", "success")
+    return redirect(url_for("stock"))
+
+
+@app.post("/stock/save-all")
+def stock_save_all():
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+    product_ids = request.form.getlist("product_id")
+    quantities = request.form.getlist("stock_qty")
+    if not product_ids or len(product_ids) != len(quantities):
+        flash("Dados inválidos para atualização em lote.", "warning")
+        return redirect(url_for("stock"))
+
+    updates_count = 0
+    movements_count = 0
+    for pid_raw, qty_raw in zip(product_ids, quantities):
+        pid = int(pid_raw)
+        new_qty = int(qty_raw)
+        current = db.execute("SELECT stock_qty FROM products WHERE id = ?", (pid,)).fetchone()
+        if not current:
+            continue
+        old_qty = int(current["stock_qty"])
+        if old_qty == new_qty:
+            continue
+        diff = new_qty - old_qty
+        db.execute("UPDATE products SET stock_qty = ? WHERE id = ?", (new_qty, pid))
+        db.execute(
+            "INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_at, performed_by) VALUES (?, 'ADJUST', ?, ?, ?, ?)",
+            (pid, diff, "AJUSTE GERAL EM LOTE", now_iso(), actor_username()),
+        )
+        updates_count += 1
+        movements_count += 1
+
+    db.commit()
+    if updates_count == 0:
+        flash("Nenhuma alteração de estoque foi detectada.", "warning")
+    else:
+        flash(f"{updates_count} produto(s) atualizado(s) com sucesso.", "success")
     return redirect(url_for("stock"))
 
 
@@ -1583,7 +1876,7 @@ def monthly_export(month_key: str):
         headers={"Content-Disposition": f"attachment; filename=faturamento_{month_key}.csv"},
     )
 
-init_db()
+init_db(MASTER_DB_PATH, seed_modules=True)
 
 
 if __name__ == "__main__":
