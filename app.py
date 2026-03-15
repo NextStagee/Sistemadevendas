@@ -106,6 +106,7 @@ ENDPOINT_TAB_MAP = {
 
 def get_master_db() -> sqlite3.Connection:
     if "master_db" not in g:
+        init_db(MASTER_DB_PATH, seed_modules=True)
         conn = sqlite3.connect(MASTER_DB_PATH)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
@@ -118,6 +119,7 @@ def get_db() -> sqlite3.Connection:
         previous = g.pop("db", None)
         if previous is not None:
             previous.close()
+        init_db(db_path, seed_modules=(db_path == MASTER_DB_PATH))
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
@@ -249,6 +251,8 @@ def init_db(db_path: Path = MASTER_DB_PATH, seed_modules: bool = False) -> None:
         """
     )
     user_columns = {row[1] for row in db.execute("PRAGMA table_info(users)").fetchall()}
+    if "role" not in user_columns:
+        db.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'ADMIN'")
     if "is_active" not in user_columns:
         db.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
     if "expires_at" not in user_columns:
@@ -395,7 +399,7 @@ def cleanup_old_backups(keep_days: int) -> None:
 
 
 def maybe_run_daily_backup() -> None:
-    db = get_db()
+    db = get_master_db()
     if get_setting(db, "backup_enabled", "1") != "1":
         return
     today = datetime.now().strftime("%Y-%m-%d")
