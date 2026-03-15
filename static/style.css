@@ -52,6 +52,8 @@ body.light-theme {
   left: 0;
   width: 210px;
   height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: var(--sidebar);
   border-right: 1px solid var(--border);
   display: flex;
@@ -87,21 +89,33 @@ body.light-theme .side-menu { background: var(--sidebar); }
 }
 
 .menu-nav {
+  width: 100%;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   justify-items: center;
   margin: auto 0;
 }
 
+.menu-filter-wrap {
+  width: 170px;
+}
+
+#menu-filter {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  border-radius: 10px;
+}
+
 .menu-nav a {
   width: 170px;
-  min-height: 46px;
+  min-height: 42px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
-  padding: 8px 12px;
-  font-size: 1.05rem;
+  gap: 9px;
+  padding: 7px 11px;
+  font-size: 0.98rem;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -110,7 +124,7 @@ body.light-theme .side-menu { background: var(--sidebar); }
 }
 
 .menu-nav a:hover { background: var(--surface-2); }
-.menu-nav a small { font-size: 0.9rem; color: var(--text); }
+.menu-nav a small { font-size: 0.82rem; color: var(--text); }
 
 .menu-actions {
   margin-top: auto;
@@ -255,6 +269,7 @@ a { color: var(--link); }
   body.menu-open .menu-backdrop { display: block; }
   .store-logo { display: block; margin-top: 62px; }
   .menu-header h1 { display: none; }
+  .menu-filter-wrap { width: 100%; }
   .menu-nav a { width: 100%; justify-content: flex-start; }
   .menu-nav a small { display: inline; }
   .menu-actions button { width: 100%; }
