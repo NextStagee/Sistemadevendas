@@ -85,6 +85,7 @@ ENDPOINT_TAB_MAP = {
     "cash": "cash",
     "products": "products",
     "product_update": "products",
+    "products_update_all": "products",
     "product_duplicate": "products",
     "stock": "stock",
     "stock_entry": "stock",
@@ -106,6 +107,7 @@ ENDPOINT_TAB_MAP = {
 
 def get_master_db() -> sqlite3.Connection:
     if "master_db" not in g:
+        init_db(MASTER_DB_PATH, seed_modules=True)
         conn = sqlite3.connect(MASTER_DB_PATH)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
@@ -118,6 +120,7 @@ def get_db() -> sqlite3.Connection:
         previous = g.pop("db", None)
         if previous is not None:
             previous.close()
+        init_db(db_path, seed_modules=(db_path == MASTER_DB_PATH))
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
@@ -249,6 +252,8 @@ def init_db(db_path: Path = MASTER_DB_PATH, seed_modules: bool = False) -> None:
         """
     )
     user_columns = {row[1] for row in db.execute("PRAGMA table_info(users)").fetchall()}
+    if "role" not in user_columns:
+        db.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'ADMIN'")
     if "is_active" not in user_columns:
         db.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
     if "expires_at" not in user_columns:
@@ -395,7 +400,7 @@ def cleanup_old_backups(keep_days: int) -> None:
 
 
 def maybe_run_daily_backup() -> None:
-    db = get_db()
+    db = get_master_db()
     if get_setting(db, "backup_enabled", "1") != "1":
         return
     today = datetime.now().strftime("%Y-%m-%d")
@@ -833,6 +838,44 @@ def admin_create_module():
 
     return redirect(url_for("admin_users"))
 
+
+@app.post("/admin/modules/<int:module_id>/delete")
+def admin_delete_module(module_id: int):
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+
+    module = db.execute("SELECT * FROM business_modules WHERE id = ?", (module_id,)).fetchone()
+    if not module:
+        flash("Módulo não encontrado.", "warning")
+        return redirect(url_for("admin_users"))
+
+    if module["code"] in ("PDV1", "PDV2"):
+        flash("Os módulos padrão PDV1 e PDV2 não podem ser removidos.", "warning")
+        return redirect(url_for("admin_users"))
+
+    total_modules = db.execute("SELECT COUNT(*) FROM business_modules").fetchone()[0]
+    if int(total_modules) <= 1:
+        flash("Não é possível remover o último módulo cadastrado.", "warning")
+        return redirect(url_for("admin_users"))
+
+    db.execute("DELETE FROM business_modules WHERE id = ?", (module_id,))
+    db.commit()
+
+    if int(session.get("module_id") or 0) == int(module_id):
+        session.pop("module_id", None)
+        session.pop("module_db", None)
+
+    db_name = (module["db_name"] or "").strip()
+    db_path = (BASE_DIR / db_name).resolve() if db_name else None
+    base_path = BASE_DIR.resolve()
+    if db_path and db_name not in {"pdv.db", "pdv2.db"} and db_path.parent == base_path and db_path.suffix == ".db" and db_path.exists():
+        db_path.unlink()
+
+    flash(f"Módulo {module['name']} removido com sucesso.", "success")
+    return redirect(url_for("admin_users"))
+
 @app.post("/admin/users/<int:user_id>/update")
 def admin_update_user(user_id: int):
     redirect_resp = require_admin()
@@ -1025,6 +1068,55 @@ def products():
 
     rows = db.execute("SELECT * FROM products ORDER BY name").fetchall()
     return render_template("products.html", products=rows)
+
+
+
+
+@app.post("/products/update-all")
+def products_update_all():
+    redirect_resp = require_login()
+    if redirect_resp:
+        return redirect_resp
+
+    db = get_db()
+    product_ids = request.form.getlist("product_id")
+    names = request.form.getlist("name")
+    categories = request.form.getlist("category")
+    cost_prices = request.form.getlist("cost_price")
+    sale_prices = request.form.getlist("sale_price")
+    stock_qtys = request.form.getlist("stock_qty")
+
+    total_items = len(product_ids)
+    if total_items == 0:
+        flash("Não há produtos para atualizar.", "warning")
+        return redirect(url_for("products"))
+
+    if not (
+        total_items == len(names) == len(categories) == len(cost_prices) == len(sale_prices) == len(stock_qtys)
+    ):
+        flash("Falha ao atualizar produtos: dados inconsistentes.", "danger")
+        return redirect(url_for("products"))
+
+    for idx, product_id in enumerate(product_ids):
+        db.execute(
+            """
+            UPDATE products
+            SET name = ?, category = ?, cost_price = ?, sale_price = ?, stock_qty = ?
+            WHERE id = ?
+            """,
+            (
+                normalize_upper(names[idx]),
+                normalize_upper(categories[idx]),
+                float(cost_prices[idx]),
+                float(sale_prices[idx]),
+                int(stock_qtys[idx]),
+                int(product_id),
+            ),
+        )
+
+    db.commit()
+    flash(f"{total_items} produto(s) atualizado(s) com sucesso.", "success")
+    return redirect(url_for("products"))
 
 
 @app.post("/products/<int:product_id>/update")
