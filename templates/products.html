@@ -27,6 +27,9 @@
 <section class="card">
   <h3>Gerenciar produtos</h3>
   <form method="post" action="{{ url_for('products_update_all') }}">
+    <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+      <button type="submit">Salvar alterações</button>
+    </div>
     <table>
       <tr><th>Código</th><th>Nome</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Estoque</th><th>Ações</th></tr>
       {% for p in products %}
@@ -49,9 +52,6 @@
       {% endfor %}
     </table>
 
-    <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
-      <button type="submit">Salvar alterações</button>
-    </div>
   </form>
 </section>
 
