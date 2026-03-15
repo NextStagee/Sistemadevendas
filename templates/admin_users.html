@@ -31,7 +31,11 @@
           <td>{{ module['pdv_label'] }}</td>
           <td>{% if module['is_active'] %}Ativo{% else %}Inativo{% endif %}</td>
           <td>
-            {% if module['code'] in ['PDV1', 'PDV2'] %}
+            <form method="post" action="{{ url_for('admin_update_module', module_id=module['id']) }}" class="inline" style="margin-bottom:6px;">
+              <input name="module_name" value="{{ module['name'] }}" required aria-label="Nome da empresa {{ module['code'] }}">
+              <button type="submit">Salvar nome</button>
+            </form>
+            {% if module['code'] == 'PDV1' %}
               <small>Módulo padrão</small>
             {% else %}
               <form method="post" action="{{ url_for('admin_delete_module', module_id=module['id']) }}" class="inline" onsubmit="return confirm('Remover esta empresa/módulo? Esta ação apagará o banco deste módulo e não pode ser desfeita.');">
@@ -43,7 +47,7 @@
         {% endfor %}
       </tbody>
     </table>
-    <small>PDV1 e PDV2 são módulos padrão e não podem ser removidos.</small>
+    <small>Apenas o PDV1 é módulo padrão e não pode ser removido.</small>
   </section>
 
   <section class="card admin-card">
@@ -86,7 +90,7 @@
         {% endfor %}
       </tbody>
     </table>
-    <small>PDV1 e PDV2 são módulos padrão e não podem ser removidos.</small>
+    <small>Apenas o PDV1 é módulo padrão e não pode ser removido.</small>
   </section>
 </div>
 
