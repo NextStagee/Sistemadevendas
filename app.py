@@ -851,8 +851,8 @@ def admin_delete_module(module_id: int):
         flash("Módulo não encontrado.", "warning")
         return redirect(url_for("admin_users"))
 
-    if module["code"] in ("PDV1", "PDV2"):
-        flash("Os módulos padrão PDV1 e PDV2 não podem ser removidos.", "warning")
+    if module["code"] == "PDV1":
+        flash("O módulo padrão PDV1 não pode ser removido.", "warning")
         return redirect(url_for("admin_users"))
 
     total_modules = db.execute("SELECT COUNT(*) FROM business_modules").fetchone()[0]
@@ -870,7 +870,7 @@ def admin_delete_module(module_id: int):
     db_name = (module["db_name"] or "").strip()
     db_path = (BASE_DIR / db_name).resolve() if db_name else None
     base_path = BASE_DIR.resolve()
-    if db_path and db_name not in {"pdv.db", "pdv2.db"} and db_path.parent == base_path and db_path.suffix == ".db" and db_path.exists():
+    if db_path and db_name != "pdv.db" and db_path.parent == base_path and db_path.suffix == ".db" and db_path.exists():
         db_path.unlink()
 
     flash(f"Módulo {module['name']} removido com sucesso.", "success")
