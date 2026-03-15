@@ -335,12 +335,7 @@ def init_db(db_path: Path = MASTER_DB_PATH, seed_modules: bool = False) -> None:
             "INSERT OR IGNORE INTO business_modules (code, name, pdv_label, db_name, is_active, created_at) VALUES ('PDV1', 'EMPRESA 1', 'PDV 1', 'pdv.db', 1, ?)",
             (now_iso(),),
         )
-        db.execute(
-            "INSERT OR IGNORE INTO business_modules (code, name, pdv_label, db_name, is_active, created_at) VALUES ('PDV2', 'EMPRESA 2', 'PDV 2', 'pdv2.db', 1, ?)",
-            (now_iso(),),
-        )
         db.execute("UPDATE business_modules SET db_name = 'pdv.db' WHERE code = 'PDV1'")
-        db.execute("UPDATE business_modules SET db_name = 'pdv2.db' WHERE code = 'PDV2'")
     logo_row = db.execute("SELECT value FROM system_settings WHERE key = 'logo_path'").fetchone()
     if logo_row:
         app.config["LOGO_PATH"] = logo_row[0]
@@ -1241,7 +1236,7 @@ def stock():
     products = db.execute("SELECT * FROM products ORDER BY name").fetchall()
     movements = db.execute(
         """
-        SELECT sm.*, p.name AS product_name FROM stock_movements sm
+        SELECT sm.*, p.name AS product_name, p.code AS product_code FROM stock_movements sm
         JOIN products p ON p.id = sm.product_id
         ORDER BY sm.created_at DESC LIMIT 50
         """

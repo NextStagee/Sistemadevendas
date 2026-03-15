@@ -80,10 +80,10 @@
   {% endif %}
 
   <main class="app-main {% if session.get('user_id') %}with-sidebar{% endif %}">
-    {% if session.get('user_id') %}
+    {% if session.get('user_id') and request.endpoint in ['products', 'stock', 'inventory'] %}
     <section class="card">
-      <label for="global-table-filter">Filtro geral (tabelas da tela)</label>
-      <input id="global-table-filter" type="search" placeholder="Filtrar por qualquer texto..." autocomplete="off">
+      <label for="global-table-filter">Filtro geral (nome ou código)</label>
+      <input id="global-table-filter" type="search" placeholder="Filtrar por nome ou código..." autocomplete="off">
     </section>
     {% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -150,8 +150,12 @@
         const rows = table.querySelectorAll('tr');
         rows.forEach((row, index) => {
           if (index === 0) return;
-          const text = (row.textContent || '').toLowerCase();
-          row.style.display = text.includes(term) ? '' : 'none';
+          const cells = Array.from(row.querySelectorAll('td'));
+          const codeText = (cells[0]?.textContent || '').toLowerCase();
+          const nameText = (cells[1]?.textContent || '').toLowerCase();
+          const fallbackText = (row.textContent || '').toLowerCase();
+          const haystack = `${codeText} ${nameText} ${fallbackText}`;
+          row.style.display = haystack.includes(term) ? '' : 'none';
         });
       });
     });
