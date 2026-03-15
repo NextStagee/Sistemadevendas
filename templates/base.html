@@ -17,6 +17,9 @@
     </div>
 
     <nav class="menu-nav">
+      <div class="menu-filter-wrap">
+        <input id="menu-filter" type="search" placeholder="Buscar opção..." autocomplete="off" aria-label="Buscar opção no menu">
+      </div>
       {% if is_admin or 'dashboard' in allowed_tabs %}
       <a href="{{ url_for('dashboard') }}" title="Início"><span>📊</span><small>Início</small></a>
       {% endif %}
@@ -157,6 +160,19 @@
       link.addEventListener('click', () => {
         body.classList.remove('menu-open');
         syncMobileMenuState();
+      });
+    });
+
+    const menuFilter = document.getElementById('menu-filter');
+    menuFilter?.addEventListener('input', () => {
+      const term = menuFilter.value.trim().toLowerCase();
+      document.querySelectorAll('.menu-nav a').forEach((link) => {
+        const text = (link.textContent || '').toLowerCase();
+        link.style.display = text.includes(term) ? 'flex' : 'none';
+      });
+      document.querySelectorAll('.menu-nav .module-switcher').forEach((form) => {
+        const text = (form.textContent || '').toLowerCase();
+        form.style.display = text.includes(term) ? 'grid' : 'none';
       });
     });
 
