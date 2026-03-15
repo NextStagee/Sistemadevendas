@@ -21,7 +21,7 @@
 
     <table>
       <thead>
-        <tr><th>Código</th><th>Empresa</th><th>PDV</th><th>Status</th></tr>
+        <tr><th>Código</th><th>Empresa</th><th>PDV</th><th>Status</th><th>Ações</th></tr>
       </thead>
       <tbody>
         {% for module in modules %}
@@ -30,10 +30,20 @@
           <td>{{ module['name'] }}</td>
           <td>{{ module['pdv_label'] }}</td>
           <td>{% if module['is_active'] %}Ativo{% else %}Inativo{% endif %}</td>
+          <td>
+            {% if module['code'] in ['PDV1', 'PDV2'] %}
+              <small>Módulo padrão</small>
+            {% else %}
+              <form method="post" action="{{ url_for('admin_delete_module', module_id=module['id']) }}" class="inline" onsubmit="return confirm('Remover esta empresa/módulo? Esta ação apagará o banco deste módulo e não pode ser desfeita.');">
+                <button type="submit">Remover</button>
+              </form>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    <small>PDV1 e PDV2 são módulos padrão e não podem ser removidos.</small>
   </section>
 
   <section class="card admin-card">
@@ -76,6 +86,7 @@
         {% endfor %}
       </tbody>
     </table>
+    <small>PDV1 e PDV2 são módulos padrão e não podem ser removidos.</small>
   </section>
 </div>
 

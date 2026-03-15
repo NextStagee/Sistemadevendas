@@ -838,6 +838,44 @@ def admin_create_module():
 
     return redirect(url_for("admin_users"))
 
+
+@app.post("/admin/modules/<int:module_id>/delete")
+def admin_delete_module(module_id: int):
+    redirect_resp = require_admin()
+    if redirect_resp:
+        return redirect_resp
+    db = get_db()
+
+    module = db.execute("SELECT * FROM business_modules WHERE id = ?", (module_id,)).fetchone()
+    if not module:
+        flash("Módulo não encontrado.", "warning")
+        return redirect(url_for("admin_users"))
+
+    if module["code"] in ("PDV1", "PDV2"):
+        flash("Os módulos padrão PDV1 e PDV2 não podem ser removidos.", "warning")
+        return redirect(url_for("admin_users"))
+
+    total_modules = db.execute("SELECT COUNT(*) FROM business_modules").fetchone()[0]
+    if int(total_modules) <= 1:
+        flash("Não é possível remover o último módulo cadastrado.", "warning")
+        return redirect(url_for("admin_users"))
+
+    db.execute("DELETE FROM business_modules WHERE id = ?", (module_id,))
+    db.commit()
+
+    if int(session.get("module_id") or 0) == int(module_id):
+        session.pop("module_id", None)
+        session.pop("module_db", None)
+
+    db_name = (module["db_name"] or "").strip()
+    db_path = (BASE_DIR / db_name).resolve() if db_name else None
+    base_path = BASE_DIR.resolve()
+    if db_path and db_name not in {"pdv.db", "pdv2.db"} and db_path.parent == base_path and db_path.suffix == ".db" and db_path.exists():
+        db_path.unlink()
+
+    flash(f"Módulo {module['name']} removido com sucesso.", "success")
+    return redirect(url_for("admin_users"))
+
 @app.post("/admin/users/<int:user_id>/update")
 def admin_update_user(user_id: int):
     redirect_resp = require_admin()
