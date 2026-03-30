@@ -1,8 +1,9 @@
 @echo off
 echo Iniciando aplicação...
 
-start cmd /k python app.py
+start "" pythonw app.py
 
 timeout /t 3 > nul
 
-start http://localhost:5000
+start "" http://localhost:5000
+exit
